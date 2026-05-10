@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="https://js.puter.com/v2/"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Swing Trade Content Platform</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #161b27;
+    --bg3: #1e2535;
+    --border: #2a3348;
+    --border2: #3a4560;
+    --text: #e8eaf0;
+    --text2: #8b93a8;
+    --text3: #555f75;
+    --blue: #3b82f6;
+    --blue-bg: #1a2744;
+    --green: #22c55e;
+    --green-bg: #0f2d1a;
+    --red: #ef4444;
+    --red-bg: #2d0f0f;
+    --amber: #f59e0b;
+    --amber-bg: #2d1f07;
+    --purple: #a855f7;
+    --purple-bg: #1f1030;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  
+  /* Layout */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 220px; background: var(--bg2); border-right: 1px solid var(--border); padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 0.5rem; flex-shrink: 0; }
+  .main { flex: 1; padding: 2rem; overflow-y: auto; max-width: 900px; }
+  
+  /* Sidebar */
+  .logo { font-size: 15px; font-weight: 600; color: var(--text); padding: 0 0.5rem 1.5rem; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem; letter-spacing: -0.02em; }
+  .logo span { color: var(--blue); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text2); cursor: pointer; transition: all 0.15s; border: none; background: none; width: 100%; text-align: left; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active { background: var(--blue-bg); color: var(--blue); }
+  .nav-icon { font-size: 16px; width: 18px; text-align: center; }
+  .nav-divider { height: 1px; background: var(--border); margin: 0.75rem 0; }
+  
+  /* Pages */
+  .page { display: none; }
+  .page.active { display: block; }
+  
+  /* Page header */
+  .page-header { margin-bottom: 2rem; }
+  .page-header h1 { font-size: 22px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+  .page-header p { font-size: 13px; color: var(--text2); margin-top: 4px; }
+  
+  /* Mode toggle */
+  .mode-btn { padding: 8px 18px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg2); font-size: 13px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .mode-btn:hover { border-color: var(--border2); color: var(--text); }
+  .mode-btn.active { background: var(--bg3); border-color: var(--border2); color: var(--text); }
+
+  /* Sector tabs */
+  .sector-tabs { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+  .sector-tab { padding: 8px 18px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg2); font-size: 13px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .sector-tab:hover { border-color: var(--border2); color: var(--text); }
+  .sector-tab.active[data-sector="idea"] { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+  .sector-tab.active[data-sector="open"] { background: var(--green-bg); border-color: var(--green); color: var(--green); }
+  .sector-tab.active[data-sector="close"] { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+  
+  /* Upload zone */
+  .upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 2.5rem; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg2); margin-bottom: 1rem; }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--blue); background: var(--blue-bg); }
+  .upload-icon { font-size: 32px; margin-bottom: 10px; }
+  .upload-zone p { font-size: 14px; color: var(--text2); }
+  .upload-zone span { font-size: 12px; color: var(--text3); }
+  #file-input { display: none; }
+  
+  /* Preview */
+  .preview-wrap { position: relative; margin-bottom: 1rem; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); }
+  .preview-wrap img { width: 100%; display: block; max-height: 280px; object-fit: contain; background: #000; }
+  .remove-btn { position: absolute; top: 8px; right: 8px; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 4px 10px; cursor: pointer; font-size: 12px; color: var(--text2); }
+  .remove-btn:hover { color: var(--red); border-color: var(--red); }
+  
+  /* Sector description */
+  .sector-desc { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--text2); margin-bottom: 1rem; border-left: 3px solid; }
+  .sector-desc.idea { background: var(--blue-bg); border-color: var(--blue); }
+  .sector-desc.open { background: var(--green-bg); border-color: var(--green); }
+  .sector-desc.close { background: var(--red-bg); border-color: var(--red); }
+
+  /* Buttons */
+  .btn { padding: 10px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: 1px solid; display: inline-flex; align-items: center; gap: 8px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: #2563eb; }
+  .btn-full { width: 100%; justify-content: center; }
+  .btn-ghost { background: transparent; border-color: var(--border); color: var(--text2); }
+  .btn-ghost:hover { border-color: var(--border2); color: var(--text); background: var(--bg3); }
+  .btn-green { background: var(--green); border-color: var(--green); color: #000; font-weight: 600; }
+  .btn-green:hover:not(:disabled) { background: #16a34a; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* Spinner */
+  .loading { display: none; text-align: center; padding: 2rem; }
+  .loading.visible { display: block; }
+  .spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading p { font-size: 13px; color: var(--text2); }
+
+  /* Results */
+  .results { display: none; margin-top: 1.5rem; }
+  .results.visible { display: block; }
+  
+  /* Meta badges */
+  .meta-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.25rem; align-items: center; }
+  .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; border: 1px solid; }
+  .badge-blue { background: var(--blue-bg); color: var(--blue); border-color: var(--blue); }
+  .badge-green { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+  .badge-red { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); border-color: var(--amber); }
+  .badge-neutral { background: var(--bg3); color: var(--text2); border-color: var(--border); }
+  .badge-purple { background: var(--purple-bg); color: var(--purple); border-color: var(--purple); }
+
+  /* Content tabs */
+  .content-tabs { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .content-tab { padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg2); font-size: 13px; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .content-tab.active { background: var(--bg3); border-color: var(--border2); color: var(--text); font-weight: 500; }
+  .content-panel { display: none; }
+  .content-panel.active { display: block; }
+
+  /* Content card */
+  .content-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+  .content-label { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+  .content-text { font-size: 14px; color: var(--text); line-height: 1.75; white-space: pre-wrap; }
+  .disclaimer { font-size: 11px; color: var(--text3); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); line-height: 1.6; font-style: italic; }
+  .card-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+  /* Close reason card */
+  .close-reason-card { background: var(--red-bg); border: 1px solid var(--red); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .close-reason-card .label { font-size: 11px; color: var(--red); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .close-reason-card .reason { font-size: 14px; color: var(--text); font-weight: 500; }
+
+  /* API Settings */
+  .settings-section { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; }
+  .settings-section h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
+  .form-group { margin-bottom: 12px; }
+  .form-group label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 5px; }
+  .form-group input, .form-group select { width: 100%; padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-size: 13px; outline: none; transition: border 0.15s; }
+  .form-group input:focus, .form-group select:focus { border-color: var(--blue); }
+  .form-group input::placeholder { color: var(--text3); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); display: inline-block; }
+  .status-dot.connected { background: var(--green); }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+  .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .stat-value { font-size: 28px; font-weight: 600; color: var(--text); letter-spacing: -0.03em; }
+  .stat-sub { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+  /* History table */
+  .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .history-table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
+  .history-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: middle; }
+  .history-table tr:last-child td { border-bottom: none; }
+  .history-table tr:hover td { background: var(--bg3); }
+  .ticker-cell { font-weight: 600; color: var(--text); }
+  .empty-state { text-align: center; padding: 3rem; color: var(--text3); font-size: 13px; }
+
+  /* Error */
+  .error-msg { display: none; padding: 12px 16px; border-radius: var(--radius-sm); background: var(--red-bg); border: 1px solid var(--red); font-size: 13px; color: var(--red); margin-top: 1rem; }
+  .error-msg.visible { display: block; }
+
+  /* YouTube modal area */
+  .youtube-fields { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-top: 1rem; }
+  .youtube-fields h4 { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 1rem; }
+
+  /* Progress */
+  .progress-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.3s; }
+
+  /* Approve section */
+  .approve-section { background: var(--bg2); border: 1px solid var(--green); border-radius: var(--radius); padding: 1.25rem; margin-top: 1.5rem; }
+  .approve-section h3 { font-size: 14px; font-weight: 600; color: var(--green); margin-bottom: 1rem; }
+  .approve-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  /* Notification */
+  .notif { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 18px; font-size: 13px; color: var(--text); box-shadow: 0 4px 20px rgba(0,0,0,0.5); transform: translateY(20px); opacity: 0; transition: all 0.3s; z-index: 1000; max-width: 300px; }
+  .notif.show { transform: translateY(0); opacity: 1; }
+  .notif.success { border-color: var(--green); color: var(--green); }
+  .notif.error { border-color: var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="logo">Swing<span>Trade</span> Studio</div>
+    <button class="nav-item active" onclick="showPage('analyze')">
+      <span class="nav-icon">📊</span> Analyze
+    </button>
+    <button class="nav-item" onclick="showPage('stats')">
+      <span class="nav-icon">📈</span> Stats
+    </button>
+    <button class="nav-item" onclick="showPage('history')">
+      <span class="nav-icon">🗂️</span> History
+    </button>
+    <div class="nav-divider"></div>
+    <button class="nav-item" onclick="showPage('settings')">
+      <span class="nav-icon">⚙️</span> Settings
+    </button>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- ANALYZE PAGE -->
+    <div class="page active" id="page-analyze">
+      <div class="page-header">
+        <h1>Chart analyzer</h1>
+        <p>Upload your chart or write a script manually to generate and publish educational content</p>
+      </div>
+
+      <!-- Mode toggle -->
+      <div style="display:flex; gap:8px; margin-bottom:1.25rem;">
+        <button class="mode-btn active" id="mode-ai" onclick="setMode('ai', this)">🤖 AI analysis</button>
+        <button class="mode-btn" id="mode-manual" onclick="setMode('manual', this)">✏️ Manual script</button>
+      </div>
+
+      <!-- AI MODE -->
+      <div id="ai-mode-section">
+        <div class="sector-tabs">
+          <button class="sector-tab active" data-sector="idea" onclick="setSector('idea', this)">💡 Idea</button>
+          <button class="sector-tab" data-sector="open" onclick="setSector('open', this)">🟢 Trade open</button>
+          <button class="sector-tab" data-sector="close" onclick="setSector('close', this)">🔴 Trade close</button>
+        </div>
+        <div class="sector-desc idea" id="sector-desc">
+          Upload a setup chart — no risk/reward tool visible. AI will identify the developing setup and create a teaser idea.
+        </div>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+          <div class="upload-icon">📤</div>
+          <p>Drop or click to upload your chart</p>
+          <span>PNG, JPG accepted</span>
+          <input type="file" id="file-input" accept="image/*">
+        </div>
+        <div style="display:flex; gap:8px; margin-bottom:1rem;">
+          <button class="btn btn-ghost" style="flex:1; justify-content:center;" onclick="pasteFromClipboard()">📋 Paste from clipboard</button>
+        </div>
+        <div class="preview-wrap" id="preview-wrap" style="display:none">
+          <img id="preview-img" src="" alt="Chart preview">
+          <button class="remove-btn" onclick="removeImage()">✕ Remove</button>
+        </div>
+        <button class="btn btn-primary btn-full" id="analyze-btn" disabled onclick="analyzeChart()">
+          ✦ Analyze chart
+        </button>
+      </div>
+
+      <!-- MANUAL MODE -->
+      <div id="manual-mode-section" style="display:none;">
+        <div class="settings-section">
+          <h3 style="margin-bottom:1rem; font-size:14px; color:var(--text2); font-weight:500;">Write or paste your content below</h3>
+          <div class="form-group">
+            <label>Ticker / Title (optional)</label>
+            <input type="text" id="manual-ticker" placeholder="e.g. NVDA, General market update, Weekly recap...">
+          </div>
+          <div class="form-group">
+            <label>Telegram message</label>
+            <textarea id="manual-telegram" rows="3" style="width:100%;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;outline:none;resize:vertical;font-family:inherit;line-height:1.6;" placeholder="Short teaser for Telegram — directs followers to YouTube..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>YouTube script</label>
+            <textarea id="manual-youtube" rows="9" style="width:100%;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;outline:none;resize:vertical;font-family:inherit;line-height:1.6;" placeholder="Full educational script for the YouTube voiceover video..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Chart image — used as video background (optional)</label>
+            <div class="upload-zone" id="manual-upload-zone" style="padding:1.2rem;" onclick="document.getElementById('manual-file-input').click()">
+              <p style="font-size:13px; margin:0;">Drop or click to add chart image</p>
+              <input type="file" id="manual-file-input" accept="image/*">
+            </div>
+            <div class="preview-wrap" id="manual-preview-wrap" style="display:none; margin-top:8px;">
+              <img id="manual-preview-img" src="" alt="Chart preview">
+              <button class="remove-btn" onclick="removeManualImage()">✕ Remove</button>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-full" onclick="useManualScript()">✦ Use this script</button>
+        </div>
+      </div>
+
+      <div class="error-msg" id="error-msg"></div>
+
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p id="loading-text">Reading your chart...</p>
+      </div>
+
+      <!-- Results -->
+      <div class="results" id="results">
+        <div class="meta-row" id="meta-row"></div>
+
+        <!-- Close reason (only for close sector) -->
+        <div class="close-reason-card" id="close-reason-card" style="display:none">
+          <div class="label">Detected closing reason</div>
+          <div class="reason" id="close-reason-text"></div>
+        </div>
+
+        <!-- Content tabs -->
+        <div class="content-tabs">
+          <button class="content-tab active" onclick="switchContentTab('telegram', this)">📲 Telegram</button>
+          <button class="content-tab" onclick="switchContentTab('youtube', this)">🎬 YouTube script</button>
+        </div>
+
+        <div class="content-panel active" id="panel-telegram">
+          <div class="content-card">
+            <div class="content-label">Telegram message</div>
+            <div class="content-text" id="telegram-content"></div>
+            <div class="disclaimer">⚠️ This content is for educational purposes only and does not constitute financial advice. Always do your own research and consult a licensed financial advisor before making any investment decisions.</div>
+            <div class="card-actions">
+              <button class="btn btn-ghost btn-sm" onclick="copyText('telegram-content', this)">📋 Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-panel" id="panel-youtube">
+          <div class="content-card">
+            <div class="content-label">YouTube script — educational voiceover</div>
+            <div class="content-text" id="youtube-content"></div>
+            <div class="disclaimer">⚠️ This content is for educational purposes only and does not constitute financial advice. Always do your own research and consult a licensed financial advisor before making any investment decisions.</div>
+            <div class="card-actions">
+              <button class="btn btn-ghost btn-sm" onclick="copyText('youtube-content', this)">📋 Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Approve & Publish -->
+        <div class="approve-section">
+          <h3>✅ Approve & publish</h3>
+          <div class="approve-actions">
+            <button class="btn btn-ghost" onclick="sendTelegram()" id="btn-telegram" disabled>📲 Send to Telegram</button>
+            <button class="btn btn-primary" onclick="generateVideoPreview()" id="btn-generate" disabled>🎬 Generate voiceover</button>
+          </div>
+
+          <!-- Generation progress -->
+          <div id="publish-progress" style="display:none; margin-top:1rem;">
+            <p style="font-size:12px; color:var(--text2); margin-bottom:6px;" id="publish-status">Generating audio...</p>
+            <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+          </div>
+
+          <!-- Video preview & final approval -->
+          <div id="video-preview-section" style="display:none; margin-top:1.25rem;">
+            <div style="font-size:12px; color:var(--text2); margin-bottom:8px; font-weight:500;">Preview before publishing</div>
+            <div style="position:relative; width:100%; border-radius:var(--radius); border:1px solid var(--border); overflow:hidden; background:#000;">
+              <img id="preview-frame-img" style="width:100%; display:block; max-height:280px; object-fit:contain;" src="" alt="Video frame">
+              <div style="padding:10px 14px; background:var(--bg2); border-top:1px solid var(--border);">
+                <div style="font-size:11px; color:var(--text3); margin-bottom:6px;">🔊 Voiceover preview</div>
+                <audio id="audio-preview-player" controls style="width:100%;"></audio>
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; align-items:center;">
+              <button class="btn btn-green" onclick="approveAndUpload()" id="btn-approve-upload">✅ Approve & upload to YouTube</button>
+              <button class="btn btn-ghost btn-sm" onclick="downloadVideo()">⬇️ Download video</button>
+              <button class="btn btn-ghost btn-sm" onclick="rejectVideo()">✕ Reject & redo</button>
+            </div>
+            <p style="font-size:11px; color:var(--text3); margin-top:10px; line-height:1.6;">💡 Video is in webm format — plays in Chrome. YouTube accepts webm directly.</p>
+          </div>
+        </div>
+
+        <div style="margin-top:1rem;">
+          <button class="btn btn-ghost btn-sm" onclick="resetAll()">↺ Analyze another chart</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS PAGE -->
+    <div class="page" id="page-stats">
+      <div class="page-header">
+        <h1>Performance stats</h1>
+        <p>Track your content output and trade ideas over time</p>
+      </div>
+      <div class="stats-grid" id="stats-grid"></div>
+    </div>
+
+    <!-- HISTORY PAGE -->
+    <div class="page" id="page-history">
+      <div class="page-header">
+        <h1>Trade history</h1>
+        <p>All analyzed charts and published content</p>
+      </div>
+      <div id="history-content"></div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <h1>Settings</h1>
+        <p>Connect your APIs — all keys stored locally in your browser only</p>
+      </div>
+
+      <div class="settings-section">
+        <h3><span class="status-dot" id="dot-claude"></span> Claude API</h3>
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="password" id="claude-key" placeholder="sk-ant-..." oninput="saveKey('claude', this.value)">
+        </div>
+        <p style="font-size:11px; color:var(--text3);">Get your key at console.anthropic.com</p>
+      </div>
+
+      <div class="settings-section">
+        <h3>🔊 Voice generation — Browser built-in</h3>
+        <p style="font-size:13px; color:var(--text2); margin-bottom:8px;">Voice is generated using your browser built-in text-to-speech — no API key needed, completely free.</p>
+        <p style="font-size:11px; color:var(--text3);">For a premium voice, ElevenLabs or Google TTS can be connected in a future update.</p>
+      </div>
+
+      <div class="settings-section">
+        <h3><span class="status-dot" id="dot-youtube"></span> YouTube Data API</h3>
+        <div class="form-group">
+          <label>API Key</label>
+          <input type="password" id="youtube-key" placeholder="Your YouTube Data API key" oninput="saveKey('youtube', this.value)">
+        </div>
+        <div class="form-group">
+          <label>Channel default category</label>
+          <select id="yt-category" onchange="saveKey('yt-category', this.value)">
+            <option value="27">Education</option>
+            <option value="25">News & Politics</option>
+            <option value="22">People & Blogs</option>
+          </select>
+        </div>
+        <p style="font-size:11px; color:var(--text3);">Enable YouTube Data API v3 at console.cloud.google.com</p>
+      </div>
+
+      <div class="settings-section">
+        <h3><span class="status-dot" id="dot-telegram"></span> Telegram Bot (coming soon)</h3>
+        <div class="form-group">
+          <label>Bot Token</label>
+          <input type="password" id="telegram-token" placeholder="Your bot token" oninput="saveKey('telegram-token', this.value)">
+        </div>
+        <div class="form-group">
+          <label>Channel / Group Chat ID</label>
+          <input type="text" id="telegram-chat" placeholder="-100xxxxxxxxx" oninput="saveKey('telegram-chat', this.value)">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="saveAllSettings()">Save settings</button>
+    </div>
+
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────
+let currentSector = 'idea';
+let imageBase64 = null;
+let imageMime = 'image/png';
+let currentAnalysis = null;
+
+// ─── Storage ─────────────────────────────────────────────
+function getDB() {
+  try { return JSON.parse(localStorage.getItem('swingDB') || '{"trades":[],"ideas":[],"stats":{}}'); }
+  catch(e) { return { trades: [], ideas: [], stats: {} }; }
+}
+function saveDB(db) { localStorage.setItem('swingDB', JSON.stringify(db)); }
+function getKey(k) { return localStorage.getItem('key_' + k) || ''; }
+function saveKey(k, v) { localStorage.setItem('key_' + k, v); updateDots(); }
+
+function updateDots() {
+  const setDot = (id, val) => { const el = document.getElementById(id); if (el) el.className = 'status-dot' + (val ? ' connected' : ''); };
+  setDot('dot-claude', getKey('claude'));
+  setDot('dot-eleven', getKey('eleven'));
+  setDot('dot-youtube', getKey('youtube'));
+  setDot('dot-telegram', getKey('telegram-token'));
+}
+
+function loadSettings() {
+  ['claude','eleven','eleven-voice','youtube','telegram-token','telegram-chat'].forEach(k => {
+    const el = document.getElementById(k + (k === 'eleven-voice' ? '' : k === 'eleven' ? '-key' : k === 'claude' ? '-key' : k === 'youtube' ? '-key' : k === 'telegram-token' ? '' : ''));
+    const input = document.getElementById(k === 'eleven-voice' ? 'eleven-voice' : k + '-key') || document.getElementById(k);
+    if (input) input.value = getKey(k);
+  });
+  const ytCat = document.getElementById('yt-category');
+  if (ytCat) ytCat.value = getKey('yt-category') || '27';
+  updateDots();
+}
+
+// ─── Navigation ───────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name === 'stats') renderStats();
+  if (name === 'history') renderHistory();
+  if (name === 'settings') loadSettings();
+}
+
+// ─── Sector ───────────────────────────────────────────────
+const sectorDescs = {
+  idea: 'Upload a setup chart — no risk/reward tool visible. AI identifies the developing setup and creates an educational teaser.',
+  open: 'Upload a chart with the risk/reward tool visible. AI confirms the trade opened and explains the educational rationale.',
+  close: 'Upload a closing chart. AI detects the reason for closing and creates a teaching moment video.'
+};
+
+function setSector(sector, btn) {
+  currentSector = sector;
+  document.querySelectorAll('.sector-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const desc = document.getElementById('sector-desc');
+  desc.textContent = sectorDescs[sector];
+  desc.className = 'sector-desc ' + sector;
+  resetAll();
+}
+
+// ─── Mode toggle ──────────────────────────────────────────
+function setMode(mode, btn) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('ai-mode-section').style.display = mode === 'ai' ? 'block' : 'none';
+  document.getElementById('manual-mode-section').style.display = mode === 'manual' ? 'block' : 'none';
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('error-msg').classList.remove('visible');
+}
+
+// Manual image
+let manualImageBase64 = null;
+let manualImageMime = 'image/png';
+
+document.addEventListener('DOMContentLoaded', () => {
+  const mfi = document.getElementById('manual-file-input');
+  if (mfi) mfi.addEventListener('change', e => handleManualFile(e.target.files[0]));
+  const muz = document.getElementById('manual-upload-zone');
+  if (muz) {
+    muz.addEventListener('dragover', e => { e.preventDefault(); muz.classList.add('drag-over'); });
+    muz.addEventListener('dragleave', () => muz.classList.remove('drag-over'));
+    muz.addEventListener('drop', e => { e.preventDefault(); muz.classList.remove('drag-over'); handleManualFile(e.dataTransfer.files[0]); });
+  }
+});
+
+function handleManualFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  manualImageMime = file.type;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    manualImageBase64 = ev.target.result.split(',')[1];
+    document.getElementById('manual-preview-img').src = ev.target.result;
+    document.getElementById('manual-preview-wrap').style.display = 'block';
+    document.getElementById('manual-upload-zone').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeManualImage() {
+  manualImageBase64 = null;
+  document.getElementById('manual-preview-wrap').style.display = 'none';
+  document.getElementById('manual-upload-zone').style.display = 'block';
+  document.getElementById('manual-file-input').value = '';
+}
+
+function useManualScript() {
+  const telegram = document.getElementById('manual-telegram').value.trim();
+  const youtube = document.getElementById('manual-youtube').value.trim();
+  const ticker = document.getElementById('manual-ticker').value.trim();
+
+  if (!telegram && !youtube) { notify('Please enter at least a Telegram message or YouTube script', 'error'); return; }
+
+  // If manual mode has an image, use it as the main image for video
+  if (manualImageBase64) {
+    imageBase64 = manualImageBase64;
+    imageMime = manualImageMime;
+  }
+
+  currentAnalysis = {
+    ticker: ticker || 'Update',
+    company: ticker || 'Manual entry',
+    trend: 'bullish',
+    chart_type: 'manual',
+    setup_type: 'manual',
+    telegram: telegram,
+    youtube: youtube,
+    event_urgency: 'none',
+    close_reason: null
+  };
+
+  document.getElementById('meta-row').innerHTML = `
+    <span class="badge badge-neutral">${ticker || 'Manual script'}</span>
+    <span class="badge badge-neutral">✏️ Manual</span>
+  `;
+  document.getElementById('close-reason-card').style.display = 'none';
+  document.getElementById('telegram-content').textContent = telegram;
+  document.getElementById('youtube-content').textContent = youtube;
+  document.getElementById('results').classList.add('visible');
+  document.getElementById('btn-telegram').disabled = false;
+  document.getElementById('btn-generate').disabled = false;
+
+  saveToHistory(currentAnalysis);
+  notify('Script ready — approve and publish below ✓', 'success');
+}
+
+// ─── Mode toggle ──────────────────────────────────────────
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+// Paste anywhere on the page
+document.addEventListener('paste', e => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      handleFile(item.getAsFile());
+      break;
+    }
+  }
+});
+
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  imageMime = file.type;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const result = ev.target.result;
+    imageBase64 = result.split(',')[1];
+    document.getElementById('preview-img').src = result;
+    document.getElementById('preview-wrap').style.display = 'block';
+    document.getElementById('upload-zone').style.display = 'none';
+    document.getElementById('analyze-btn').disabled = false;
+    document.getElementById('results').classList.remove('visible');
+    document.getElementById('error-msg').classList.remove('visible');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function pasteFromClipboard() {
+  try {
+    const permission = await navigator.permissions.query({ name: 'clipboard-read' });
+    if (permission.state === 'denied') {
+      notify('Clipboard access denied — try Ctrl+V on the page or use the file picker', 'error');
+      return;
+    }
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imgType = item.types.find(t => t.startsWith('image/'));
+      if (imgType) {
+        const blob = await item.getType(imgType);
+        handleFile(new File([blob], 'chart.png', { type: imgType }));
+        return;
+      }
+    }
+    notify('No image found in clipboard — copy a screenshot first', 'error');
+  } catch(e) {
+    notify('Could not access clipboard — try Ctrl+V on the page or use the file picker', 'error');
+  }
+}
+
+function removeImage() {
+  imageBase64 = null;
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('upload-zone').style.display = 'block';
+  document.getElementById('analyze-btn').disabled = true;
+  fileInput.value = '';
+}
+
+function resetAll() {
+  removeImage();
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('error-msg').classList.remove('visible');
+  currentAnalysis = null;
+}
+
+// ─── Content tabs ────────────────────────────────────────
+function switchContentTab(name, btn) {
+  document.querySelectorAll('.content-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.content-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+// ─── Copy ─────────────────────────────────────────────────
+function copyText(id, btn) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    setTimeout(() => btn.textContent = orig, 1800);
+  });
+}
+
+// ─── Notify ───────────────────────────────────────────────
+function notify(msg, type = '') {
+  const n = document.getElementById('notif');
+  n.textContent = msg;
+  n.className = 'notif show' + (type ? ' ' + type : '');
+  setTimeout(() => n.className = 'notif', 3500);
+}
+
+// ─── Build system prompt ──────────────────────────────────
+function buildPrompt(sector) {
+  const base = `You are an experienced swing trader creating EDUCATIONAL content for your community. Your content teaches trading concepts using real chart examples. It is NOT financial advice. Every output must be framed as education — "here is what I see and why, based on my strategy" — never "buy this" or "this will go up".
+
+CHART READING RULES:
+- ALWAYS focus ONLY on the RIGHT panel — this is the daily timeframe chart.
+- Background color: GREEN = long-term trend bullish. RED = long-term trend bearish.
+- Shaded zone (cloud): Green cloud = short-term bullish. Red cloud = short-term bearish / correction on green background.
+- LAST SIGNAL ONLY — ignore all previous signals, only read the most recent one before current price:
+  * Blue dot = end of CORRECTION phase → use word "correction" naturally
+  * Yellow triangle = PULLBACK continuation → use word "pullback" naturally
+  * Orange dot = EXIT / new correction started
+  * Pink/red triangle = bearish setup
+- Volatility: red dashed ATR line ABOVE the cloud = overextended, wait. INSIDE or below = ok.
+- Dashboard left panel: use ONLY the "D EMA 9 > 20" or "D Trend" row. Left number = expected close level. Right number = stop loss level.
+- OLD HIGH = purple horizontal line. Calculate % from entry level to old high. Under 2% = warn to monitor closely or wait. 2%+ = mention as natural target area.
+- EARNINGS (E) / DIVIDEND (D) markers on time axis RIGHT panel:
+  * 1-3 candles ahead = urgent, avoid or close before event
+  * Few weeks ahead = mention casually, plan to close before
+  * Far out = do not mention
+- NEVER say "that's the trigger" — say "if after the close we meet all strategy criteria above [level]..."
+- NEVER mention the score
+- NEVER say "dot", "triangle", "cloud", "ATR", "EMA", "signal", "indicator"
+- Always refer to purple line as "the old high"
+- Sound like a warm, confident trader teaching his community — not giving advice
+
+DISCLAIMER to include naturally at end of every script:
+"This is purely for educational purposes — it is not financial advice. Always do your own research and never trade based solely on what you see here."
+
+OUTPUT: Valid JSON only, no markdown:`;
+
+  const ideaPrompt = base + `
+SECTOR: IDEA — setup chart, no risk/reward tool visible.
+{
+  "ticker": "ticker",
+  "company": "full name",
+  "trend": "bullish" or "bearish",
+  "setup_type": "correction" or "pullback" or "waiting",
+  "old_high_pct": number,
+  "event_urgency": "none" or "soon" or "urgent",
+  "close_reason": null,
+  "telegram": "2-3 sentences MAX. Tease the setup — just enough to make followers curious. Name, trend direction, one hook line. Direct to YouTube. NO levels, NO details.",
+  "youtube": "8-12 sentences. Teach the viewer what you see on this chart and why it's interesting based on your strategy. Explain the long-term trend, what the short-term is doing, what you are watching for and why. Include the close level and stop level naturally. Address the old high distance and what it means. Mention events if relevant. End with the educational disclaimer naturally woven in."
+}`;
+
+  const openPrompt = base + `
+SECTOR: TRADE OPEN — risk/reward tool box is visible on chart with entry/stop/target levels and % move shown.
+{
+  "ticker": "ticker",
+  "company": "full name",
+  "trend": "bullish" or "bearish",
+  "setup_type": "correction" or "pullback",
+  "entry": number,
+  "stop": number,
+  "target": number,
+  "move_pct": number,
+  "rr_ratio": number,
+  "old_high_pct": number,
+  "event_urgency": "none" or "soon" or "urgent",
+  "close_reason": null,
+  "telegram": "2-3 sentences. Say the trade is now active. Use exact entry level. Direct to YouTube for full educational breakdown. NO other details.",
+  "youtube": "10-14 sentences teaching moment. Start by saying after a daily close at [entry] met all strategy criteria. Explain WHY this setup made sense educationally — trend context, what the correction/pullback looked like, why the entry zone was significant. Give exact stop and target and explain the risk management logic educationally. Address the old high if relevant. Mention events if relevant. End with educational disclaimer."
+}`;
+
+  const closePrompt = base + `
+SECTOR: TRADE CLOSE — detect the closing reason from the chart:
+- Stop loss hit: price is BELOW the stop loss level of the risk/reward tool
+- Early close - price fell below the cloud: price has dropped BELOW the cloud entirely
+- Target reached: price has hit the TP level of the risk/reward tool
+- Gap fill close: price created a gap and instead of continuing is filling it downward
+- New correction started: orange dot appeared signaling the move may be ending
+
+{
+  "ticker": "ticker",
+  "company": "full name",
+  "trend": "bullish" or "bearish",
+  "setup_type": "correction" or "pullback",
+  "close_reason": one of: "stop_loss" or "below_cloud" or "target_reached" or "gap_fill" or "new_correction",
+  "close_reason_label": human readable label e.g. "Stop loss hit" or "Early close — new correction signal",
+  "event_urgency": "none" or "soon" or "urgent",
+  "old_high_pct": 0,
+  "telegram": "2-3 sentences. Say the trade on [ticker] has been closed. State the reason simply. Direct to YouTube for the full educational breakdown.",
+  "youtube": "12-16 sentences full teaching moment. Explain what happened on this chart, why the trade was closed, and what this teaches us about the strategy and risk management. If stop loss — teach about why we respect stops. If early close — teach about reading the chart for warning signs. If target reached — celebrate and teach about taking profits. If gap fill — teach about gap behaviour and why we made this decision. If new correction — teach about recognizing when momentum shifts. Make it educational and empowering for the viewer. End with educational disclaimer."
+}`;
+
+  if (sector === 'idea') return ideaPrompt;
+  if (sector === 'open') return openPrompt;
+  return closePrompt;
+}
+
+// ─── Analyze ──────────────────────────────────────────────
+async function analyzeChart() {
+  if (!imageBase64) return;
+  const claudeKey = getKey('claude');
+  if (!claudeKey) { showError('Please add your Claude API key in Settings first.'); return; }
+
+  document.getElementById('analyze-btn').disabled = true;
+  document.getElementById('loading').classList.add('visible');
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('error-msg').classList.remove('visible');
+  document.getElementById('loading-text').textContent = 'Reading your chart...';
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': claudeKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        system: buildPrompt(currentSector),
+        messages: [{
+          role: 'user',
+          content: [{
+            type: 'image',
+            source: { type: 'base64', media_type: imageMime, data: imageBase64 }
+          }, {
+            type: 'text',
+            text: `Analyze this ${currentSector === 'idea' ? 'setup' : currentSector === 'open' ? 'trade open' : 'trade close'} chart and generate educational content following all the rules.`
+          }]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    const rawText = data.content.map(i => i.text || '').join('');
+    const clean = rawText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    currentAnalysis = parsed;
+
+    renderResults(parsed);
+    saveToHistory(parsed);
+
+    document.getElementById('loading').classList.remove('visible');
+    document.getElementById('results').classList.add('visible');
+    document.getElementById('btn-telegram').disabled = false;
+    document.getElementById('btn-generate').disabled = false;
+
+  } catch(err) {
+    document.getElementById('loading').classList.remove('visible');
+    showError(err.message || 'Something went wrong. Please try again.');
+    document.getElementById('analyze-btn').disabled = false;
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+
+function renderResults(p) {
+  // Meta badges
+  const trendClass = p.trend === 'bullish' ? 'badge-green' : 'badge-red';
+  const trendLabel = p.trend === 'bullish' ? '↑ Bullish trend' : '↓ Bearish trend';
+  const sectorLabel = currentSector === 'idea' ? '💡 Idea' : currentSector === 'open' ? '🟢 Trade open' : '🔴 Trade close';
+  const eventBadge = p.event_urgency === 'urgent' ? '<span class="badge badge-red">⚡ Event imminent</span>' :
+                     p.event_urgency === 'soon' ? '<span class="badge badge-amber">📅 Event upcoming</span>' : '';
+
+  document.getElementById('meta-row').innerHTML = `
+    ${p.ticker ? `<span class="badge badge-neutral">${p.ticker}</span>` : ''}
+    ${p.company ? `<span class="badge badge-neutral">${p.company}</span>` : ''}
+    <span class="badge ${trendClass}">${trendLabel}</span>
+    <span class="badge badge-neutral">${sectorLabel}</span>
+    ${p.setup_type ? `<span class="badge badge-neutral">${p.setup_type}</span>` : ''}
+    ${eventBadge}
+  `;
+
+  // Close reason
+  const crCard = document.getElementById('close-reason-card');
+  if (currentSector === 'close' && p.close_reason_label) {
+    crCard.style.display = 'block';
+    document.getElementById('close-reason-text').textContent = p.close_reason_label;
+  } else {
+    crCard.style.display = 'none';
+  }
+
+  document.getElementById('telegram-content').textContent = p.telegram || '';
+  document.getElementById('youtube-content').textContent = p.youtube || '';
+}
+
+// ─── History ──────────────────────────────────────────────
+function saveToHistory(parsed) {
+  const db = getDB();
+  const entry = {
+    id: Date.now(),
+    date: new Date().toISOString(),
+    sector: currentSector,
+    ticker: parsed.ticker || '—',
+    company: parsed.company || '—',
+    trend: parsed.trend,
+    setup_type: parsed.setup_type,
+    close_reason: parsed.close_reason || null,
+    entry: parsed.entry || null,
+    stop: parsed.stop || null,
+    target: parsed.target || null,
+    move_pct: parsed.move_pct || null,
+    rr_ratio: parsed.rr_ratio || null,
+    telegram: parsed.telegram,
+    youtube: parsed.youtube,
+    published_telegram: false,
+    published_youtube: false
+  };
+  db.trades.unshift(entry);
+  if (db.trades.length > 500) db.trades = db.trades.slice(0, 500);
+  saveDB(db);
+}
+
+// ─── Publish ──────────────────────────────────────────────
+async function sendTelegram() {
+  const token = getKey('telegram-token');
+  const chat = getKey('telegram-chat');
+  if (!token || !chat) { notify('Add Telegram credentials in Settings first', 'error'); return; }
+  if (!currentAnalysis) return;
+
+  try {
+    const text = currentAnalysis.telegram + '\n\n⚠️ Educational content only — not financial advice.';
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chat, text, parse_mode: 'HTML' })
+    });
+    const data = await res.json();
+    if (data.ok) { notify('Sent to Telegram ✓', 'success'); markPublished('telegram'); }
+    else throw new Error(data.description);
+  } catch(e) {
+    notify('Telegram error: ' + e.message, 'error');
+  }
+}
+
+let generatedVideoBlob = null;
+let generatedAudioBlob = null;
+
+async function generateVideoPreview() {
+  if (!currentAnalysis) return;
+
+  const progress = document.getElementById('publish-progress');
+  const status = document.getElementById('publish-status');
+  const fill = document.getElementById('progress-fill');
+  const previewSection = document.getElementById('video-preview-section');
+
+  progress.style.display = 'block';
+  previewSection.style.display = 'none';
+  document.getElementById('btn-generate').disabled = true;
+  generatedVideoBlob = null;
+
+  const script = currentAnalysis.youtube + ' This content is for educational purposes only and does not constitute financial advice.';
+
+  try {
+    // Step 1: Generate audio via Puter.js (Amazon Polly Neural — free)
+    status.textContent = 'Generating voiceover...';
+    fill.style.width = '10%';
+    const audioBlob = await generateAudioBlob(script);
+    generatedAudioBlob = audioBlob;
+    fill.style.width = '40%';
+
+    // Step 2: Draw high quality canvas frame
+    status.textContent = 'Preparing video frame...';
+    const W = 1920, H = 1080;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    await new Promise((resolve) => {
+      if (imageBase64) {
+        const img = new Image();
+        img.onload = () => {
+          // Fill background black
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, W, H);
+          // Scale image to fill width, maintain aspect ratio
+          const scale = Math.max(W / img.width, H / img.height);
+          const sw = img.width * scale;
+          const sh = img.height * scale;
+          const sx = (W - sw) / 2;
+          const sy = (H - sh) / 2;
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, sx, sy, sw, sh);
+          resolve();
+        };
+        img.onerror = () => { ctx.fillStyle = '#0f1117'; ctx.fillRect(0, 0, W, H); resolve(); };
+        img.src = 'data:' + (imageMime || 'image/png') + ';base64,' + imageBase64;
+      } else {
+        ctx.fillStyle = '#0f1117';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#3b82f6';
+        ctx.font = 'bold 72px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(currentAnalysis.ticker || 'Trade Idea', W/2, H/2 - 30);
+        ctx.fillStyle = '#8b93a8';
+        ctx.font = '36px sans-serif';
+        ctx.fillText('SwingTrade Studio — Educational Content', W/2, H/2 + 60);
+        resolve();
+      }
+    });
+
+    // Disclaimer bar
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(0, H - 52, W, 52);
+    ctx.fillStyle = '#aaa';
+    ctx.font = '20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Educational content only — not financial advice. Always do your own research.', W/2, H - 18);
+
+    fill.style.width = '55%';
+    status.textContent = 'Sending to video server... (may take 60s first time)';
+
+    // Step 3: Combine canvas + audio into video
+    const videoBlob = await createVideo(canvas, audioBlob, (p) => {
+      fill.style.width = (55 + p * 42) + '%';
+    });
+
+    fill.style.width = '100%';
+    status.textContent = 'Video ready — preview below ✓';
+    generatedVideoBlob = videoBlob;
+
+    // Show image preview
+    const frameImg = document.getElementById('preview-frame-img');
+    if (imageBase64) {
+      frameImg.src = 'data:' + (imageMime || 'image/png') + ';base64,' + imageBase64;
+    } else {
+      frameImg.style.display = 'none';
+    }
+
+    // Show audio preview
+    const audioPlayer = document.getElementById('audio-preview-player');
+    audioPlayer.src = URL.createObjectURL(audioBlob);
+
+    previewSection.style.display = 'block';
+    previewSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    notify('Video generated — review and approve ✓', 'success');
+
+  } catch(e) {
+    status.textContent = 'Error: ' + e.message;
+    fill.style.width = '0%';
+    notify('Error: ' + e.message, 'error');
+    document.getElementById('btn-generate').disabled = false;
+  }
+}
+
+// Puter.js TTS — free, no API key, Amazon Polly neural voices
+function estimateDuration(text) {
+  const words = text.trim().split(/\s+/).length;
+  return Math.ceil((words / 130) * 60) * 1000 + 2000;
+}
+
+async function generateAudioBlob(text) {
+  // Wait for Puter.js to be ready
+  if (typeof puter === 'undefined') {
+    await new Promise((resolve, reject) => {
+      let attempts = 0;
+      const check = setInterval(() => {
+        attempts++;
+        if (typeof puter !== 'undefined') {
+          clearInterval(check);
+          resolve();
+        } else if (attempts > 30) {
+          clearInterval(check);
+          reject(new Error('Puter.js failed to load. Please refresh the page and try again.'));
+        }
+      }, 500);
+    });
+  }
+
+  // Use Puter.js neural TTS (Amazon Polly under the hood)
+  const audio = await puter.ai.txt2speech(text, {
+    voice: "Matthew",
+    engine: "neural",
+    language: "en-US"
+  });
+  // audio is an HTMLAudioElement — get its src blob
+  const res = await fetch(audio.src);
+  return await res.blob();
+}
+
+async function approveAndUpload() {
+  const youtubeKey = getKey('youtube');
+  if (!youtubeKey) { notify('Add YouTube API key in Settings first', 'error'); return; }
+  if (!generatedVideoBlob) { notify('Generate a video first', 'error'); return; }
+
+  const status = document.getElementById('publish-status');
+  const fill = document.getElementById('progress-fill');
+  document.getElementById('btn-approve-upload').disabled = true;
+  status.textContent = 'Uploading to YouTube...';
+  fill.style.width = '10%';
+
+  try {
+    const ticker = currentAnalysis.ticker || 'Trade';
+    const sectorLabel = currentSector === 'idea' ? 'Setup idea' : currentSector === 'open' ? 'Trade open' : currentSector === 'close' ? 'Trade close' : 'Educational update';
+    const title = `${ticker} — ${sectorLabel} | Educational swing trade analysis`;
+    const description = `${currentAnalysis.youtube}\n\n⚠️ DISCLAIMER: This video is for educational and informational purposes only. It does not constitute financial advice, investment recommendations, or solicitation to buy or sell any securities. Always conduct your own research and consult with a licensed financial advisor before making any investment decisions. Past performance is not indicative of future results.`;
+
+    await uploadToYoutube(youtubeKey, generatedVideoBlob, title, description);
+    fill.style.width = '100%';
+    status.textContent = 'Published to YouTube ✓';
+    notify('Video uploaded to YouTube ✓', 'success');
+    markPublished('youtube');
+  } catch(e) {
+    status.textContent = 'Upload error: ' + e.message;
+    notify('Upload error: ' + e.message, 'error');
+    document.getElementById('btn-approve-upload').disabled = false;
+  }
+}
+
+function downloadVideo() {
+  if (!generatedVideoBlob) { notify('No video generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedVideoBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-video.mp4`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('MP4 downloaded ✓', 'success');
+}
+
+function downloadAudio() {
+  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedAudioBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('Audio downloaded ✓', 'success');
+}
+
+async function convertToMp4(webmBlob) {
+  // Load FFmpeg 0.11 dynamically — simpler API, works in browser
+  if (!window._ffmpegLoaded) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    window._ffmpegLoaded = true;
+  }
+
+  const { createFFmpeg, fetchFile } = FFmpeg;
+  const ffmpeg = createFFmpeg({
+    log: false,
+    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+  });
+
+  notify('Loading converter... (first time takes ~30 seconds)', '');
+  await ffmpeg.load();
+
+  notify('Converting to MP4...', '');
+  const inputData = await fetchFile(webmBlob);
+  ffmpeg.FS('writeFile', 'input.webm', inputData);
+
+  await ffmpeg.run(
+    '-i', 'input.webm',
+    '-c:v', 'libx264',
+    '-preset', 'ultrafast',
+    '-crf', '23',
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-movflags', '+faststart',
+    'output.mp4'
+  );
+
+  const mp4Data = ffmpeg.FS('readFile', 'output.mp4');
+  ffmpeg.FS('unlink', 'input.webm');
+  ffmpeg.FS('unlink', 'output.mp4');
+
+  return new Blob([mp4Data.buffer], { type: 'video/mp4' });
+}
+
+function downloadAudio() {
+  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedAudioBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function rejectVideo() {
+  generatedVideoBlob = null;
+  document.getElementById('video-preview-section').style.display = 'none';
+  document.getElementById('publish-progress').style.display = 'none';
+  document.getElementById('btn-generate').disabled = false;
+  notify('Video rejected — edit your script and generate again', '');
+}
+
+// createVideo: sends image + audio to our Render server → gets real MP4 back
+async function createVideo(canvas, audioBlob, onProgress) {
+  const SERVER = window.location.hostname === 'localhost' || 
+                 window.location.hostname === 'djrideas-video-server.onrender.com'
+    ? '' 
+    : 'https://djrideas-video-server.onrender.com';
+
+  document.getElementById('publish-status').textContent = 'Preparing files...';
+  onProgress(0.1);
+
+  // Convert canvas to JPEG blob
+  const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+  onProgress(0.15);
+
+  // Build multipart form
+  const formData = new FormData();
+  formData.append('image', imageBlob, 'chart.jpg');
+  formData.append('audio', audioBlob, 'voice.mp3');
+
+  document.getElementById('publish-status').textContent = 'Creating MP4... this takes 1-2 minutes';
+  onProgress(0.2);
+
+  // Fake progress
+  let fake = 0.2;
+  const fakeInt = setInterval(() => {
+    fake = Math.min(fake + 0.01, 0.92);
+    onProgress(fake);
+  }, 3000);
+
+  try {
+    const res = await fetch(SERVER + '/create-video', {
+      method: 'POST',
+      body: formData
+    });
+
+    clearInterval(fakeInt);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Server error ' + res.status);
+    }
+
+    onProgress(0.97);
+    document.getElementById('publish-status').textContent = 'Downloading MP4...';
+    const mp4Blob = await res.blob();
+    console.log('MP4 received, size:', mp4Blob.size);
+    if (mp4Blob.size === 0) throw new Error('Empty video returned');
+    onProgress(1.0);
+    return mp4Blob;
+
+  } catch(e) {
+    clearInterval(fakeInt);
+    throw e;
+  }
+}
+
+
+async function approveAndUpload() {
+  const youtubeKey = getKey('youtube');
+  if (!youtubeKey) { notify('Add YouTube API key in Settings first', 'error'); return; }
+  if (!generatedVideoBlob) { notify('Generate a video first', 'error'); return; }
+
+  const status = document.getElementById('publish-status');
+  const fill = document.getElementById('progress-fill');
+  document.getElementById('btn-approve-upload').disabled = true;
+  status.textContent = 'Uploading to YouTube...';
+  fill.style.width = '10%';
+
+  try {
+    const ticker = currentAnalysis.ticker || 'Trade';
+    const sectorLabel = currentSector === 'idea' ? 'Setup idea' : currentSector === 'open' ? 'Trade open' : currentSector === 'close' ? 'Trade close' : 'Educational update';
+    const title = `${ticker} — ${sectorLabel} | Educational swing trade analysis`;
+    const description = `${currentAnalysis.youtube}\n\n⚠️ DISCLAIMER: This video is for educational and informational purposes only. It does not constitute financial advice, investment recommendations, or solicitation to buy or sell any securities. Always conduct your own research and consult with a licensed financial advisor before making any investment decisions. Past performance is not indicative of future results.`;
+
+    await uploadToYoutube(youtubeKey, generatedVideoBlob, title, description);
+    fill.style.width = '100%';
+    status.textContent = 'Published to YouTube ✓';
+    notify('Video uploaded to YouTube ✓', 'success');
+    markPublished('youtube');
+  } catch(e) {
+    status.textContent = 'Upload error: ' + e.message;
+    notify('Upload error: ' + e.message, 'error');
+    document.getElementById('btn-approve-upload').disabled = false;
+  }
+}
+
+function downloadVideo() {
+  if (!generatedVideoBlob) { notify('No video generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedVideoBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-video.mp4`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('MP4 downloaded ✓', 'success');
+}
+
+function downloadAudio() {
+  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedAudioBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('Audio downloaded ✓', 'success');
+}
+
+async function convertToMp4(webmBlob) {
+  // Load FFmpeg 0.11 dynamically — simpler API, works in browser
+  if (!window._ffmpegLoaded) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    window._ffmpegLoaded = true;
+  }
+
+  const { createFFmpeg, fetchFile } = FFmpeg;
+  const ffmpeg = createFFmpeg({
+    log: false,
+    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+  });
+
+  notify('Loading converter... (first time takes ~30 seconds)', '');
+  await ffmpeg.load();
+
+  notify('Converting to MP4...', '');
+  const inputData = await fetchFile(webmBlob);
+  ffmpeg.FS('writeFile', 'input.webm', inputData);
+
+  await ffmpeg.run(
+    '-i', 'input.webm',
+    '-c:v', 'libx264',
+    '-preset', 'ultrafast',
+    '-crf', '23',
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-movflags', '+faststart',
+    'output.mp4'
+  );
+
+  const mp4Data = ffmpeg.FS('readFile', 'output.mp4');
+  ffmpeg.FS('unlink', 'input.webm');
+  ffmpeg.FS('unlink', 'output.mp4');
+
+  return new Blob([mp4Data.buffer], { type: 'video/mp4' });
+}
+
+function downloadAudio() {
+  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedAudioBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function rejectVideo() {
+  generatedVideoBlob = null;
+  document.getElementById('video-preview-section').style.display = 'none';
+  document.getElementById('publish-progress').style.display = 'none';
+  document.getElementById('btn-generate').disabled = false;
+  notify('Video rejected — edit your script and generate again', '');
+}
+
+// createVideo: uses MediaRecorder with proper stream setup
+// Key fix: create AudioContext BEFORE any async operations
+async function createVideo(canvas, audioBlob, onProgress) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      document.getElementById('publish-status').textContent = 'Preparing...';
+      onProgress(0.05);
+
+      // Get duration
+      const duration = await getAudioDuration(audioBlob);
+      console.log('Audio duration:', duration);
+
+      // Create object URL for audio
+      const audioURL = URL.createObjectURL(audioBlob);
+      const audio = new Audio();
+      audio.src = audioURL;
+      audio.preload = 'auto';
+
+      // Wait for audio to be ready
+      await new Promise((res, rej) => {
+        audio.oncanplaythrough = res;
+        audio.onerror = rej;
+        setTimeout(res, 3000);
+      });
+
+      onProgress(0.15);
+      document.getElementById('publish-status').textContent = 'Starting recording...';
+
+      // Set up canvas stream
+      const canvasStream = canvas.captureStream(25);
+      console.log('Canvas stream tracks:', canvasStream.getTracks().length);
+
+      // Use audio element stream directly
+      let combinedStream;
+      try {
+        // Try to capture audio from the audio element
+        const audioCtx = new AudioContext();
+        await audioCtx.resume();
+        const source = audioCtx.createMediaElementSource(audio);
+        const dest = audioCtx.createMediaStreamDestination();
+        source.connect(dest);
+        source.connect(audioCtx.destination);
+        
+        const audioTrack = dest.stream.getAudioTracks()[0];
+        if (audioTrack) {
+          canvasStream.addTrack(audioTrack);
+          console.log('Audio track added to stream');
+        }
+        combinedStream = canvasStream;
+      } catch(e) {
+        console.warn('Audio routing failed, using video only:', e);
+        combinedStream = canvasStream;
+      }
+
+      // Set up MediaRecorder
+      const mimeType = ['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm']
+        .find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+      
+      console.log('Using mimeType:', mimeType);
+
+      const recorder = new MediaRecorder(combinedStream, { 
+        mimeType, 
+        videoBitsPerSecond: 2500000,
+        audioBitsPerSecond: 128000
+      });
+      
+      const chunks = [];
+      recorder.ondataavailable = e => {
+        console.log('Data available, size:', e.data?.size);
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+      
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        console.log('Final blob size:', blob.size, 'chunks:', chunks.length);
+        URL.revokeObjectURL(audioURL);
+        resolve(blob);
+      };
+      
+      recorder.onerror = e => {
+        console.error('Recorder error:', e);
+        reject(new Error('Recorder error'));
+      };
+
+      // Progress
+      let elapsed = 0;
+      const interval = setInterval(() => {
+        elapsed += 0.5;
+        onProgress(Math.min(0.15 + (elapsed / duration) * 0.82, 0.97));
+        document.getElementById('publish-status').textContent = 
+          `Recording... ${Math.round(elapsed)}s / ${Math.round(duration)}s`;
+      }, 500);
+
+      // START: recorder first, then play audio
+      recorder.start(); // no timeslice — collect all at once at stop
+      console.log('Recorder state after start:', recorder.state);
+
+      // Request data periodically manually
+      const dataInterval = setInterval(() => {
+        if (recorder.state === 'recording') {
+          recorder.requestData();
+        }
+      }, 1000);
+
+      // Small delay then play
+      setTimeout(async () => {
+        try {
+          await audio.play();
+          console.log('Audio playing');
+        } catch(e) {
+          console.error('Audio play error:', e);
+        }
+      }, 300);
+
+      // Stop on audio end
+      audio.onended = () => {
+        console.log('Audio ended');
+        clearInterval(interval);
+        clearInterval(dataInterval);
+        setTimeout(() => {
+          if (recorder.state !== 'inactive') recorder.stop();
+        }, 800);
+      };
+
+      // Hard fallback
+      setTimeout(() => {
+        clearInterval(interval);
+        clearInterval(dataInterval);
+        if (recorder.state !== 'inactive') {
+          console.log('Fallback stop triggered');
+          recorder.stop();
+        }
+      }, (duration * 1000) + 6000);
+
+    } catch(e) {
+      console.error('createVideo error:', e);
+      reject(e);
+    }
+  });
+}
+
+
+async function approveAndUpload() {
+  const youtubeKey = getKey('youtube');
+  if (!youtubeKey) { notify('Add YouTube API key in Settings first', 'error'); return; }
+  if (!generatedVideoBlob) { notify('Generate a video first', 'error'); return; }
+
+  const status = document.getElementById('publish-status');
+  const fill = document.getElementById('progress-fill');
+  document.getElementById('btn-approve-upload').disabled = true;
+  status.textContent = 'Uploading to YouTube...';
+  fill.style.width = '10%';
+
+  try {
+    const ticker = currentAnalysis.ticker || 'Trade';
+    const sectorLabel = currentSector === 'idea' ? 'Setup idea' : currentSector === 'open' ? 'Trade open' : currentSector === 'close' ? 'Trade close' : 'Educational update';
+    const title = `${ticker} — ${sectorLabel} | Educational swing trade analysis`;
+    const description = `${currentAnalysis.youtube}\n\n⚠️ DISCLAIMER: This video is for educational and informational purposes only. It does not constitute financial advice, investment recommendations, or solicitation to buy or sell any securities. Always conduct your own research and consult with a licensed financial advisor before making any investment decisions. Past performance is not indicative of future results.`;
+
+    await uploadToYoutube(youtubeKey, generatedVideoBlob, title, description);
+    fill.style.width = '100%';
+    status.textContent = 'Published to YouTube ✓';
+    notify('Video uploaded to YouTube ✓', 'success');
+    markPublished('youtube');
+  } catch(e) {
+    status.textContent = 'Upload error: ' + e.message;
+    notify('Upload error: ' + e.message, 'error');
+    document.getElementById('btn-approve-upload').disabled = false;
+  }
+}
+
+function downloadVideo() {
+  if (!generatedVideoBlob) { notify('No video generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedVideoBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-video.mp4`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('MP4 downloaded ✓', 'success');
+}
+
+function downloadAudio() {
+  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedAudioBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('Audio downloaded ✓', 'success');
+}
+
+async function convertToMp4(webmBlob) {
+  // Load FFmpeg 0.11 dynamically — simpler API, works in browser
+  if (!window._ffmpegLoaded) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+    window._ffmpegLoaded = true;
+  }
+
+  const { createFFmpeg, fetchFile } = FFmpeg;
+  const ffmpeg = createFFmpeg({
+    log: false,
+    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+  });
+
+  notify('Loading converter... (first time takes ~30 seconds)', '');
+  await ffmpeg.load();
+
+  notify('Converting to MP4...', '');
+  const inputData = await fetchFile(webmBlob);
+  ffmpeg.FS('writeFile', 'input.webm', inputData);
+
+  await ffmpeg.run(
+    '-i', 'input.webm',
+    '-c:v', 'libx264',
+    '-preset', 'ultrafast',
+    '-crf', '23',
+    '-c:a', 'aac',
+    '-b:a', '128k',
+    '-movflags', '+faststart',
+    'output.mp4'
+  );
+
+  const mp4Data = ffmpeg.FS('readFile', 'output.mp4');
+  ffmpeg.FS('unlink', 'input.webm');
+  ffmpeg.FS('unlink', 'output.mp4');
+
+  return new Blob([mp4Data.buffer], { type: 'video/mp4' });
+}
+
+function downloadAudio() {
+  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
+  const url = URL.createObjectURL(generatedAudioBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function rejectVideo() {
+  generatedVideoBlob = null;
+  document.getElementById('video-preview-section').style.display = 'none';
+  document.getElementById('publish-progress').style.display = 'none';
+  document.getElementById('btn-generate').disabled = false;
+  notify('Video rejected — edit your script and generate again', '');
+}
+
+// createVideo: browser-based recording using Web Audio API
+// Properly decodes audio first then records canvas + audio together
+async function createVideo(canvas, audioBlob, onProgress) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      document.getElementById('publish-status').textContent = 'Decoding audio...';
+      onProgress(0.05);
+
+      // Decode audio to get duration
+      const arrayBuf1 = await audioBlob.arrayBuffer();
+      const tempCtx = new AudioContext();
+      await tempCtx.resume();
+      const decoded = await tempCtx.decodeAudioData(arrayBuf1);
+      const duration = decoded.duration;
+      await tempCtx.close();
+
+      onProgress(0.1);
+      document.getElementById('publish-status').textContent = 'Setting up recording...';
+
+      // Fresh AudioContext — must resume to activate
+      const audioCtx = new AudioContext();
+      await audioCtx.resume();
+
+      const streamDest = audioCtx.createMediaStreamDestination();
+
+      // Load audio into buffer source
+      const arrayBuf2 = await audioBlob.arrayBuffer();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuf2);
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(streamDest);
+      source.connect(audioCtx.destination);
+
+      // Build combined canvas + audio stream
+      const canvasStream = canvas.captureStream(25);
+      const audioTrack = streamDest.stream.getAudioTracks()[0];
+      if (audioTrack) canvasStream.addTrack(audioTrack);
+
+      // Pick best mime type
+      const mimeType = ['video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/webm']
+        .find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+
+      const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 4000000 });
+      const chunks = [];
+      recorder.ondataavailable = e => { 
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+      recorder.onstop = () => {
+        audioCtx.close();
+        const blob = new Blob(chunks, { type: mimeType });
+        console.log('Recording done, blob size:', blob.size, 'chunks:', chunks.length);
+        resolve(blob);
+      };
+      recorder.onerror = e => reject(new Error('Recording error: ' + e));
+
+      // Progress tracking
+      let elapsed = 0;
+      const interval = setInterval(() => {
+        elapsed += 0.5;
+        onProgress(Math.min(0.1 + (elapsed / duration) * 0.87, 0.97));
+        document.getElementById('publish-status').textContent =
+          `Recording... ${Math.round(elapsed)}s / ${Math.round(duration)}s`;
+      }, 500);
+
+      // Start recorder, wait a moment, then start audio
+      recorder.start(100);
+      await new Promise(r => setTimeout(r, 200));
+      
+      // Resume context again right before playing (Chrome may suspend it)
+      await audioCtx.resume();
+      source.start(0);
+
+      console.log('Recording started, audioCtx state:', audioCtx.state);
+
+      // Stop when audio ends
+      source.onended = () => {
+        console.log('Audio ended, stopping recorder');
+        clearInterval(interval);
+        setTimeout(() => {
+          if (recorder.state === 'recording') recorder.stop();
+        }, 600);
+      };
+
+      // Hard timeout fallback
+      setTimeout(() => {
+        console.log('Timeout fallback firing');
+        clearInterval(interval);
+        if (recorder.state === 'recording') recorder.stop();
+      }, (duration * 1000) + 5000);
+
+    } catch(e) {
+      reject(e);
+    }
+  });
+}
+
+function getAudioDuration(blob) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onloadedmetadata = () => resolve(audio.duration || 60);
+    audio.onerror = () => resolve(60);
+  });
+}
+
+async function uploadToYoutube(apiKey, videoBlob, title, description) {
+  const category = getKey('yt-category') || '27';
+  const metadata = {
+    snippet: { title, description, categoryId: category, tags: ['swing trading', 'stock market education', 'technical analysis', 'educational'] },
+    status: { privacyStatus: 'public', selfDeclaredMadeForKids: false }
+  };
+
+  const boundary = '-------314159265358979323846';
+  const delimiter = '\r\n--' + boundary + '\r\n';
+  const closeDelim = '\r\n--' + boundary + '--';
+
+  const metadataStr = JSON.stringify(metadata);
+  const metaPart = 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + metadataStr;
+  const videoPart = 'Content-Type: video/webm\r\n\r\n';
+
+  const videoAB = await videoBlob.arrayBuffer();
+  const encoder = new TextEncoder();
+
+  const parts = [
+    encoder.encode(delimiter + metaPart + delimiter + videoPart),
+    new Uint8Array(videoAB),
+    encoder.encode(closeDelim)
+  ];
+  const total = parts.reduce((s, p) => s + p.length, 0);
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const p of parts) { body.set(p, offset); offset += p.length; }
+
+  const res = await fetch(`https://www.googleapis.com/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status&key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary="${boundary}"`, 'Content-Length': total },
+    body
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error?.message || 'YouTube upload failed');
+  }
+  return res.json();
+}
+
+function markPublished(type) {
+  const db = getDB();
+  if (db.trades.length > 0) {
+    db.trades[0]['published_' + type] = true;
+    saveDB(db);
+  }
+}
+
+// ─── Stats ────────────────────────────────────────────────
+function renderStats() {
+  const db = getDB();
+  const trades = db.trades;
+  const total = trades.length;
+  const ideas = trades.filter(t => t.sector === 'idea').length;
+  const opens = trades.filter(t => t.sector === 'open').length;
+  const closes = trades.filter(t => t.sector === 'close').length;
+  const targets = trades.filter(t => t.close_reason === 'target_reached').length;
+  const stops = trades.filter(t => t.close_reason === 'stop_loss').length;
+
+  let daysSinceLast = '—';
+  if (trades.length > 0) {
+    const last = new Date(trades[0].date);
+    const diff = Math.floor((Date.now() - last) / 86400000);
+    daysSinceLast = diff === 0 ? 'Today' : diff + 'd ago';
+  }
+
+  const winRate = closes > 0 ? Math.round((targets / closes) * 100) : 0;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total analyses</div><div class="stat-value">${total}</div><div class="stat-sub">All time</div></div>
+    <div class="stat-card"><div class="stat-label">Ideas posted</div><div class="stat-value">${ideas}</div><div class="stat-sub">Setup charts</div></div>
+    <div class="stat-card"><div class="stat-label">Trades opened</div><div class="stat-value">${opens}</div><div class="stat-sub">Confirmed entries</div></div>
+    <div class="stat-card"><div class="stat-label">Trades closed</div><div class="stat-value">${closes}</div><div class="stat-sub">${stops} stopped out</div></div>
+    <div class="stat-card"><div class="stat-label">Target hit rate</div><div class="stat-value">${winRate}%</div><div class="stat-sub">${targets} of ${closes} closed</div></div>
+    <div class="stat-card"><div class="stat-label">Last activity</div><div class="stat-value" style="font-size:18px">${daysSinceLast}</div><div class="stat-sub">Most recent chart</div></div>
+  `;
+}
+
+// ─── History ──────────────────────────────────────────────
+function renderHistory() {
+  const db = getDB();
+  const trades = db.trades;
+  const container = document.getElementById('history-content');
+
+  if (trades.length === 0) {
+    container.innerHTML = '<div class="empty-state">No charts analyzed yet. Go to Analyze to get started.</div>';
+    return;
+  }
+
+  const sectorIcon = { idea: '💡', open: '🟢', close: '🔴' };
+  const rows = trades.map(t => {
+    const date = new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const tgBadge = t.published_telegram ? '📲' : '';
+    const ytBadge = t.published_youtube ? '🎬' : '';
+    return `<tr>
+      <td>${date}</td>
+      <td class="ticker-cell">${t.ticker}</td>
+      <td>${sectorIcon[t.sector] || ''} ${t.sector}</td>
+      <td>${t.setup_type || t.close_reason || '—'}</td>
+      <td>${t.rr_ratio ? t.rr_ratio.toFixed(1) + ':1' : '—'}</td>
+      <td>${tgBadge} ${ytBadge}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="overflow-x:auto; background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);">
+      <table class="history-table">
+        <thead><tr>
+          <th>Date</th><th>Ticker</th><th>Sector</th><th>Setup</th><th>R:R</th><th>Published</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function saveAllSettings() {
+  ['claude-key','eleven-key','eleven-voice','youtube-key','telegram-token','telegram-chat'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      const k = id.replace('-key','').replace('-','_').replace('_','');
+      localStorage.setItem('key_' + id.replace('-key',''), el.value);
+    }
+  });
+  const ytCat = document.getElementById('yt-category');
+  if (ytCat) localStorage.setItem('key_yt-category', ytCat.value);
+  updateDots();
+  notify('Settings saved ✓', 'success');
+}
+
+// ─── Init ─────────────────────────────────────────────────
+updateDots();
+</script>
+</body>
+</html>
