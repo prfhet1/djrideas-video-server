@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<script src="https://js.puter.com/v2/"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Swing Trade Content Platform</title>
 <style>
@@ -1045,31 +1044,20 @@ function estimateDuration(text) {
 }
 
 async function generateAudioBlob(text) {
-  // Wait for Puter.js to be ready
-  if (typeof puter === 'undefined') {
-    await new Promise((resolve, reject) => {
-      let attempts = 0;
-      const check = setInterval(() => {
-        attempts++;
-        if (typeof puter !== 'undefined') {
-          clearInterval(check);
-          resolve();
-        } else if (attempts > 30) {
-          clearInterval(check);
-          reject(new Error('Puter.js failed to load. Please refresh the page and try again.'));
-        }
-      }, 500);
-    });
+  // Use Microsoft Edge Neural TTS via our Render server — free, no API key
+  const SERVER = 'https://djrideas-video-server.onrender.com';
+
+  const res = await fetch(SERVER + '/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error('TTS error: ' + (err.error || res.status));
   }
 
-  // Use Puter.js neural TTS (Amazon Polly under the hood)
-  const audio = await puter.ai.txt2speech(text, {
-    voice: "Matthew",
-    engine: "neural",
-    language: "en-US"
-  });
-  // audio is an HTMLAudioElement — get its src blob
-  const res = await fetch(audio.src);
   return await res.blob();
 }
 
