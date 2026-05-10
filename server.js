@@ -6,7 +6,7 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+const { execSync, exec } = require('child_process');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -24,32 +24,45 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'DJR Ideas Video Server running' });
 });
 
-// TTS — Microsoft Edge Neural Voice, free, no API key
+// TTS using espeak-ng — installed on Render's Linux environment
 app.post('/tts', async (req, res) => {
   const tmpDir = os.tmpdir();
   const jobId = Date.now();
-  const audioPath = path.join(tmpDir, `tts_${jobId}.mp3`);
+  const wavPath = path.join(tmpDir, `tts_${jobId}.wav`);
+  const mp3Path = path.join(tmpDir, `tts_${jobId}.mp3`);
 
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'Missing text' });
 
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata(
-      'en-US-GuyNeural',
-      OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3
-    );
+    // Write text to file to avoid shell escaping issues
+    const textFile = path.join(tmpDir, `text_${jobId}.txt`);
+    fs.writeFileSync(textFile, text);
 
-    const { audioStream } = await tts.toStream(text);
-    const writeStream = fs.createWriteStream(audioPath);
-
+    // Use espeak-ng — available on Render's Ubuntu environment
+    // -v en-us+m3 = male voice, -s 145 = speed, -p 40 = pitch
     await new Promise((resolve, reject) => {
-      audioStream.pipe(writeStream);
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
+      exec(
+        `espeak-ng -v en-us+m3 -s 145 -p 40 -f "${textFile}" -w "${wavPath}"`,
+        (err, stdout, stderr) => {
+          if (err) reject(new Error('espeak error: ' + stderr));
+          else resolve();
+        }
+      );
     });
 
-    const audioBuffer = fs.readFileSync(audioPath);
+    // Convert WAV to MP3 using FFmpeg for better quality
+    await new Promise((resolve, reject) => {
+      ffmpeg(wavPath)
+        .audioCodec('libmp3lame')
+        .audioBitrate(128)
+        .output(mp3Path)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+
+    const audioBuffer = fs.readFileSync(mp3Path);
     res.set({
       'Content-Type': 'audio/mpeg',
       'Content-Length': audioBuffer.length,
@@ -58,14 +71,15 @@ app.post('/tts', async (req, res) => {
     res.send(audioBuffer);
 
   } catch(err) {
-    console.error('TTS error:', err);
+    console.error('TTS error:', err.message);
     res.status(500).json({ error: err.message });
   } finally {
-    try { if (fs.existsSync(audioPath)) fs.unlinkSync(audioPath); } catch(e) {}
+    [wavPath, mp3Path, path.join(os.tmpdir(), `text_${jobId}.txt`)]
+      .forEach(f => { try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch(e) {} });
   }
 });
 
-// Video creation — image + audio → MP4 via FFmpeg
+// Video creation — image + audio → MP4
 app.post('/create-video', upload.fields([
   { name: 'image', maxCount: 1 },
   { name: 'audio', maxCount: 1 }
@@ -115,7 +129,7 @@ app.post('/create-video', upload.fields([
     res.send(mp4Buffer);
 
   } catch(err) {
-    console.error('Video error:', err);
+    console.error('Video error:', err.message);
     res.status(500).json({ error: err.message });
   } finally {
     [imagePath, audioPath, outputPath].forEach(f => {
