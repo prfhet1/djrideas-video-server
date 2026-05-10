@@ -13,25 +13,19 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Use memory storage for uploads
 const storage = multer.memoryStorage();
-const upload = multer({ 
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
-});
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
-// Health check
-app.get('/', (req, res) => {
+app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'DJR Ideas Video Server running' });
 });
 
-// Main endpoint: combine image + audio into MP4
 app.post('/create-video', upload.fields([
   { name: 'image', maxCount: 1 },
   { name: 'audio', maxCount: 1 }
 ]), async (req, res) => {
-  
   const tmpDir = os.tmpdir();
   const jobId = Date.now();
   const imagePath = path.join(tmpDir, `image_${jobId}.jpg`);
@@ -43,11 +37,9 @@ app.post('/create-video', upload.fields([
       return res.status(400).json({ error: 'Missing image or audio file' });
     }
 
-    // Write uploaded files to temp directory
     fs.writeFileSync(imagePath, req.files.image[0].buffer);
     fs.writeFileSync(audioPath, req.files.audio[0].buffer);
 
-    // Combine image + audio into MP4 using FFmpeg
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(imagePath)
@@ -69,7 +61,6 @@ app.post('/create-video', upload.fields([
         .run();
     });
 
-    // Send the MP4 back
     const mp4Buffer = fs.readFileSync(outputPath);
     res.set({
       'Content-Type': 'video/mp4',
@@ -82,7 +73,6 @@ app.post('/create-video', upload.fields([
     console.error('Video creation error:', err);
     res.status(500).json({ error: err.message });
   } finally {
-    // Cleanup temp files
     [imagePath, audioPath, outputPath].forEach(f => {
       try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch(e) {}
     });
