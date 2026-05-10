@@ -6,7 +6,7 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { execSync, exec } = require('child_process');
+const gTTS = require('gtts');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -24,45 +24,67 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'DJR Ideas Video Server running' });
 });
 
-// TTS using espeak-ng — installed on Render's Linux environment
+// TTS using gTTS (Google Translate TTS via Node.js wrapper)
 app.post('/tts', async (req, res) => {
   const tmpDir = os.tmpdir();
   const jobId = Date.now();
-  const wavPath = path.join(tmpDir, `tts_${jobId}.wav`);
   const mp3Path = path.join(tmpDir, `tts_${jobId}.mp3`);
 
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'Missing text' });
 
-    // Write text to file to avoid shell escaping issues
-    const textFile = path.join(tmpDir, `text_${jobId}.txt`);
-    fs.writeFileSync(textFile, text);
+    // Split into chunks of 180 chars max
+    const words = text.split(' ');
+    const chunks = [];
+    let current = '';
+    for (const word of words) {
+      if ((current + ' ' + word).trim().length > 170) {
+        if (current) chunks.push(current.trim());
+        current = word;
+      } else {
+        current = (current + ' ' + word).trim();
+      }
+    }
+    if (current) chunks.push(current.trim());
 
-    // Use espeak-ng — available on Render's Ubuntu environment
-    // -v en-us+m3 = male voice, -s 145 = speed, -p 40 = pitch
-    await new Promise((resolve, reject) => {
-      exec(
-        `espeak-ng -v en-us+m3 -s 145 -p 40 -f "${textFile}" -w "${wavPath}"`,
-        (err, stdout, stderr) => {
-          if (err) reject(new Error('espeak error: ' + stderr));
+    // Generate audio for each chunk and combine
+    const chunkFiles = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkPath = path.join(tmpDir, `chunk_${jobId}_${i}.mp3`);
+      await new Promise((resolve, reject) => {
+        const gtts = new gTTS(chunks[i], 'en');
+        gtts.save(chunkPath, (err) => {
+          if (err) reject(err);
           else resolve();
-        }
-      );
-    });
+        });
+      });
+      chunkFiles.push(chunkPath);
+    }
 
-    // Convert WAV to MP3 using FFmpeg for better quality
-    await new Promise((resolve, reject) => {
-      ffmpeg(wavPath)
-        .audioCodec('libmp3lame')
-        .audioBitrate(128)
-        .output(mp3Path)
-        .on('end', resolve)
-        .on('error', reject)
-        .run();
-    });
+    // Combine chunks with FFmpeg
+    let finalPath;
+    if (chunkFiles.length === 1) {
+      finalPath = chunkFiles[0];
+    } else {
+      finalPath = mp3Path;
+      const listFile = path.join(tmpDir, `list_${jobId}.txt`);
+      fs.writeFileSync(listFile, chunkFiles.map(f => `file '${f}'`).join('\n'));
+      await new Promise((resolve, reject) => {
+        ffmpeg()
+          .input(listFile)
+          .inputOptions(['-f concat', '-safe 0'])
+          .outputOptions(['-c copy'])
+          .output(finalPath)
+          .on('end', resolve)
+          .on('error', reject)
+          .run();
+      });
+      fs.unlinkSync(listFile);
+      chunkFiles.forEach(f => { try { fs.unlinkSync(f); } catch(e) {} });
+    }
 
-    const audioBuffer = fs.readFileSync(mp3Path);
+    const audioBuffer = fs.readFileSync(finalPath);
     res.set({
       'Content-Type': 'audio/mpeg',
       'Content-Length': audioBuffer.length,
@@ -74,8 +96,7 @@ app.post('/tts', async (req, res) => {
     console.error('TTS error:', err.message);
     res.status(500).json({ error: err.message });
   } finally {
-    [wavPath, mp3Path, path.join(os.tmpdir(), `text_${jobId}.txt`)]
-      .forEach(f => { try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch(e) {} });
+    try { if (fs.existsSync(mp3Path)) fs.unlinkSync(mp3Path); } catch(e) {}
   }
 });
 
