@@ -73,7 +73,7 @@ app.post('/tts', async (req, res) => {
     const chunkFiles = [];
     for (let i = 0; i < chunks.length; i++) {
       const encoded = encodeURIComponent(chunks[i]);
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encoded}&tl=en-us&sl=en&client=tw-ob&ttsspeed=0.9`;
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encoded}&tl=en-gb&sl=en&client=tw-ob&ttsspeed=0.85`;
       const buffer = await fetchBuffer(url);
       const chunkPath = path.join(tmpDir, `chunk_${jobId}_${i}.mp3`);
       fs.writeFileSync(chunkPath, buffer);
