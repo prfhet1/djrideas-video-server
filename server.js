@@ -138,9 +138,9 @@ app.post('/create-video', upload.fields([
         .inputOptions(['-loop 1'])
         .input(audioPath)
         .outputOptions([
-          '-c:v libx264', '-tune stillimage', '-c:a aac', '-b:a 128k',
-          '-pix_fmt yuv420p', '-shortest', '-movflags +faststart',
-          '-vf scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black'
+          '-c:v libx264', '-tune stillimage', '-preset ultrafast', '-crf 28',
+          '-c:a aac', '-b:a 96k', '-pix_fmt yuv420p', '-shortest', '-movflags +faststart',
+          '-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black'
         ])
         .output(outputPath)
         .on('end', resolve)
