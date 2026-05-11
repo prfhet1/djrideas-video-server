@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script src="coi-serviceworker.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Swing Trade Content Platform</title>
 <style>
@@ -1174,60 +1175,82 @@ function rejectVideo() {
   notify('Video rejected — edit your script and generate again', '');
 }
 
-// createVideo: sends image + audio to our Render server → gets real MP4 back
+// createVideo: uses FFmpeg WASM in browser — no server needed
+// Requires coi-serviceworker.js for SharedArrayBuffer support
+let ffmpegInstance = null;
+
+async function getFFmpeg() {
+  if (ffmpegInstance) return ffmpegInstance;
+
+  // Load FFmpeg WASM dynamically
+  const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
+  const { fetchFile, toBlobURL } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
+
+  const ffmpeg = new FFmpeg();
+  ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
+  ffmpeg.on('progress', ({ progress }) => {
+    const fill = document.getElementById('progress-fill');
+    if (fill) fill.style.width = (55 + progress * 40) + '%';
+  });
+
+  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+  await ffmpeg.load({
+    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+  });
+
+  ffmpegInstance = { ffmpeg, fetchFile };
+  return ffmpegInstance;
+}
+
 async function createVideo(canvas, audioBlob, onProgress) {
-  const SERVER = window.location.hostname === 'localhost' || 
-                 window.location.hostname === 'djrideas-video-server.onrender.com'
-    ? '' 
-    : 'https://djrideas-video-server.onrender.com';
+  document.getElementById('publish-status').textContent = 'Loading FFmpeg... (first time ~30 seconds)';
+  onProgress(0.05);
 
-  document.getElementById('publish-status').textContent = 'Preparing files...';
-  onProgress(0.1);
+  const { ffmpeg, fetchFile } = await getFFmpeg();
 
-  // Convert canvas to JPEG blob
-  const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-  onProgress(0.15);
-
-  // Build multipart form
-  const formData = new FormData();
-  formData.append('image', imageBlob, 'chart.jpg');
-  formData.append('audio', audioBlob, 'voice.mp3');
-
-  document.getElementById('publish-status').textContent = 'Creating MP4... this takes 1-2 minutes';
   onProgress(0.2);
+  document.getElementById('publish-status').textContent = 'Preparing files...';
 
-  // Fake progress
-  let fake = 0.2;
-  const fakeInt = setInterval(() => {
-    fake = Math.min(fake + 0.01, 0.92);
-    onProgress(fake);
-  }, 3000);
+  // Convert canvas to JPEG
+  const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+  const imageData = await fetchFile(imageBlob);
+  const audioData = await fetchFile(audioBlob);
 
-  try {
-    const res = await fetch(SERVER + '/create-video', {
-      method: 'POST',
-      body: formData
-    });
+  await ffmpeg.writeFile('image.jpg', imageData);
+  await ffmpeg.writeFile('audio.mp3', audioData);
 
-    clearInterval(fakeInt);
+  onProgress(0.3);
+  document.getElementById('publish-status').textContent = 'Creating MP4... (takes 2-4 minutes)';
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Server error ' + res.status);
-    }
+  // Combine image + audio into MP4
+  await ffmpeg.exec([
+    '-loop', '1',
+    '-i', 'image.jpg',
+    '-i', 'audio.mp3',
+    '-c:v', 'libx264',
+    '-tune', 'stillimage',
+    '-preset', 'ultrafast',
+    '-crf', '28',
+    '-c:a', 'aac',
+    '-b:a', '96k',
+    '-pix_fmt', 'yuv420p',
+    '-shortest',
+    '-movflags', '+faststart',
+    '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black',
+    'output.mp4'
+  ]);
 
-    onProgress(0.97);
-    document.getElementById('publish-status').textContent = 'Downloading MP4...';
-    const mp4Blob = await res.blob();
-    console.log('MP4 received, size:', mp4Blob.size);
-    if (mp4Blob.size === 0) throw new Error('Empty video returned');
-    onProgress(1.0);
-    return mp4Blob;
+  onProgress(0.95);
+  document.getElementById('publish-status').textContent = 'Finalizing...';
 
-  } catch(e) {
-    clearInterval(fakeInt);
-    throw e;
-  }
+  const data = await ffmpeg.readFile('output.mp4');
+  await ffmpeg.deleteFile('image.jpg');
+  await ffmpeg.deleteFile('audio.mp3');
+  await ffmpeg.deleteFile('output.mp4');
+
+  onProgress(1.0);
+  return new Blob([data.buffer], { type: 'video/mp4' });
 }
 
 
