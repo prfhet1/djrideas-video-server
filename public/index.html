@@ -1175,56 +1175,51 @@ function rejectVideo() {
   notify('Video rejected — edit your script and generate again', '');
 }
 
-// createVideo: uses FFmpeg WASM in browser — no server needed
-// Requires coi-serviceworker.js for SharedArrayBuffer support
-let ffmpegInstance = null;
+// createVideo: uses FFmpeg WASM v0.11 — single thread, no SharedArrayBuffer needed
+// Uses older API that works without CORS worker restrictions
+let ffmpegLoaded = false;
 
-async function getFFmpeg() {
-  if (ffmpegInstance) return ffmpegInstance;
-
-  // Load FFmpeg WASM dynamically
-  const { FFmpeg } = await import('https://esm.sh/@ffmpeg/ffmpeg@0.12.10');
-  const { fetchFile, toBlobURL } = await import('https://esm.sh/@ffmpeg/util@0.12.1');
-
-  const ffmpeg = new FFmpeg();
-  ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
-  ffmpeg.on('progress', ({ progress }) => {
-    const fill = document.getElementById('progress-fill');
-    if (fill) fill.style.width = (55 + progress * 40) + '%';
+async function loadFFmpegScript() {
+  if (ffmpegLoaded) return;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
+    s.onload = () => { ffmpegLoaded = true; resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
   });
-
-  const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-  });
-
-  ffmpegInstance = { ffmpeg, fetchFile };
-  return ffmpegInstance;
 }
 
 async function createVideo(canvas, audioBlob, onProgress) {
-  document.getElementById('publish-status').textContent = 'Loading FFmpeg... (first time ~30 seconds)';
+  document.getElementById('publish-status').textContent = 'Loading FFmpeg...';
   onProgress(0.05);
 
-  const { ffmpeg, fetchFile } = await getFFmpeg();
+  await loadFFmpegScript();
+
+  const { createFFmpeg, fetchFile } = FFmpeg;
+  const ffmpeg = createFFmpeg({
+    log: true,
+    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+    progress: ({ ratio }) => {
+      if (ratio > 0) onProgress(0.3 + ratio * 0.65);
+    }
+  });
+
+  document.getElementById('publish-status').textContent = 'Loading FFmpeg core... (~30 seconds first time)';
+  await ffmpeg.load();
 
   onProgress(0.2);
   document.getElementById('publish-status').textContent = 'Preparing files...';
 
   // Convert canvas to JPEG
   const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-  const imageData = await fetchFile(imageBlob);
-  const audioData = await fetchFile(audioBlob);
-
-  await ffmpeg.writeFile('image.jpg', imageData);
-  await ffmpeg.writeFile('audio.mp3', audioData);
+  ffmpeg.FS('writeFile', 'image.jpg', await fetchFile(imageBlob));
+  ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(audioBlob));
 
   onProgress(0.3);
   document.getElementById('publish-status').textContent = 'Creating MP4... (takes 2-4 minutes)';
 
-  // Combine image + audio into MP4
-  await ffmpeg.exec([
+  await ffmpeg.run(
     '-loop', '1',
     '-i', 'image.jpg',
     '-i', 'audio.mp3',
@@ -1239,15 +1234,15 @@ async function createVideo(canvas, audioBlob, onProgress) {
     '-movflags', '+faststart',
     '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black',
     'output.mp4'
-  ]);
+  );
 
-  onProgress(0.95);
+  onProgress(0.97);
   document.getElementById('publish-status').textContent = 'Finalizing...';
 
-  const data = await ffmpeg.readFile('output.mp4');
-  await ffmpeg.deleteFile('image.jpg');
-  await ffmpeg.deleteFile('audio.mp3');
-  await ffmpeg.deleteFile('output.mp4');
+  const data = ffmpeg.FS('readFile', 'output.mp4');
+  ffmpeg.FS('unlink', 'image.jpg');
+  ffmpeg.FS('unlink', 'audio.mp3');
+  ffmpeg.FS('unlink', 'output.mp4');
 
   onProgress(1.0);
   return new Blob([data.buffer], { type: 'video/mp4' });
