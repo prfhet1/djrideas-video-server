@@ -568,12 +568,57 @@ function useManualScript() {
     imageMime = manualImageMime;
   }
 
+  // Auto-extract levels from the script text
+  function extractLevel(text, patterns) {
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m) return parseFloat(m[1].replace(/,/g,''));
+    }
+    return null;
+  }
+
+  const scriptText = youtube + ' ' + telegram;
+
+  const entry = extractLevel(scriptText, [
+    /(?:entry|close|above|entering|entered)[^$]*\$\s*([\d,]+\.?\d*)/i,
+    /\$([\d,]+\.?\d*).*?(?:entry|trigger|confirm)/i,
+    /above\s+\$?\s*([\d,]+\.?\d*)/i,
+  ]);
+
+  const stop = extractLevel(scriptText, [
+    /(?:stop|sl|stop.?loss)[^$]*\$\s*([\d,]+\.?\d*)/i,
+    /\$([\d,]+\.?\d*).*?(?:stop|sl)/i,
+    /stop.*?(?:at|around|below|sitting at)\s+\$?\s*([\d,]+\.?\d*)/i,
+  ]);
+
+  const target = extractLevel(scriptText, [
+    /(?:target|old high|objective)[^$]*\$\s*([\d,]+\.?\d*)/i,
+    /\$([\d,]+\.?\d*).*?(?:target|old high)/i,
+    /targeting.*?\$?\s*([\d,]+\.?\d*)/i,
+  ]);
+
+  const rrMatch = scriptText.match(/(?:risk.?reward|r:r|r\/r)[^0-9]*([\d.]+)\s*(?:to\s*1|:1)?/i);
+  const rr = rrMatch ? parseFloat(rrMatch[1]) : null;
+
+  const moveMatch = scriptText.match(/([\d.]+)\s*%\s*(?:move|from|upside|potential)/i);
+  const move = moveMatch ? parseFloat(moveMatch[1]) : null;
+
+  // Detect trend from script
+  const bullishWords = (scriptText.match(/(bullish|bull|long|upside|bounce|recover)/gi) || []).length;
+  const bearishWords = (scriptText.match(/(bearish|bear|short|downside|decline|drop)/gi) || []).length;
+  const trend = bearishWords > bullishWords ? 'bearish' : 'bullish';
+
   currentAnalysis = {
-    ticker: ticker || 'Update',
-    company: ticker || 'Manual entry',
-    trend: 'bullish',
+    ticker: ticker || '',
+    company: ticker || '',
+    trend: trend,
     chart_type: 'manual',
     setup_type: 'manual',
+    entry: entry,
+    stop: stop,
+    target: target,
+    rr_ratio: rr,
+    move_pct: move,
     telegram: telegram,
     youtube: youtube,
     event_urgency: 'none',
@@ -1208,16 +1253,22 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
   ctx.fillStyle = '#0f1117';
   ctx.fillRect(0, 0, W, H);
 
-  // Chart image — max quality, no zoom, cover fill
+  // Chart image — max quality, contain fit so nothing is cut
   if (chartImg) {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     const imgW = chartImg.naturalWidth || chartImg.width;
     const imgH = chartImg.naturalHeight || chartImg.height;
-    const scale = Math.max(W / imgW, H / imgH);
+    // Use contain (not cover) — scale to fit within frame, no cropping
+    const scale = Math.min(W / imgW, H / imgH);
     const dw = imgW * scale;
     const dh = imgH * scale;
-    ctx.drawImage(chartImg, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    const dx = (W - dw) / 2;
+    const dy = (H - dh) / 2;
+    // Fill black behind image
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(chartImg, dx, dy, dw, dh);
   }
 
   // INTRO CARD (first ~3.5 seconds)
@@ -1249,10 +1300,10 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     ctx.fillStyle = '#000';
     ctx.font = 'bold 18px sans-serif';
     ctx.fillText(isBullish ? '↑  BULLISH TREND' : '↓  BEARISH TREND', W/2, H/2 + 76);
-    if (analysis && analysis.ticker) {
+    if (analysis && analysis.ticker && analysis.ticker !== 'Update' && analysis.chart_type !== 'manual') {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = '20px sans-serif';
-      const name = analysis.ticker + (analysis.company ? ' — ' + analysis.company : '');
+      const name = analysis.ticker + (analysis.company && analysis.company !== 'Manual entry' ? ' — ' + analysis.company : '');
       ctx.fillText(name, W/2, H/2 + 118);
     }
     ctx.restore();
@@ -1295,11 +1346,16 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
 
     const levels = [];
     if (analysis) {
-      if (analysis.entry)    levels.push({ label: 'Entry',  value: `$${analysis.entry}`,                          color: '#3b82f6' });
-      if (analysis.stop)     levels.push({ label: 'Stop',   value: `$${analysis.stop}`,                           color: '#ef4444' });
-      if (analysis.target)   levels.push({ label: 'Target', value: `$${analysis.target}`,                         color: '#22c55e' });
-      if (analysis.rr_ratio) levels.push({ label: 'R:R',    value: `${parseFloat(analysis.rr_ratio).toFixed(1)}:1`, color: '#f59e0b' });
-      if (analysis.move_pct) levels.push({ label: 'Move',   value: `${parseFloat(analysis.move_pct).toFixed(1)}%`, color: '#a855f7' });
+      if (analysis.entry && !isNaN(parseFloat(analysis.entry)))    
+        levels.push({ label: 'Entry',  value: `$${parseFloat(analysis.entry).toFixed(2)}`,  color: '#3b82f6' });
+      if (analysis.stop && !isNaN(parseFloat(analysis.stop)))     
+        levels.push({ label: 'Stop',   value: `$${parseFloat(analysis.stop).toFixed(2)}`,   color: '#ef4444' });
+      if (analysis.target && !isNaN(parseFloat(analysis.target)))   
+        levels.push({ label: 'Target', value: `$${parseFloat(analysis.target).toFixed(2)}`, color: '#22c55e' });
+      if (analysis.rr_ratio && !isNaN(parseFloat(analysis.rr_ratio))) 
+        levels.push({ label: 'R:R',    value: `${parseFloat(analysis.rr_ratio).toFixed(1)}:1`, color: '#f59e0b' });
+      if (analysis.move_pct && !isNaN(parseFloat(analysis.move_pct))) 
+        levels.push({ label: 'Move',   value: `${parseFloat(analysis.move_pct).toFixed(1)}%`, color: '#a855f7' });
     }
 
     const barH = 68;
@@ -1312,13 +1368,13 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     ctx.fillRect(0, barY, 7, barH);
 
     // Left: ticker + company + sector
-    const ticker = (analysis && analysis.ticker) || '';
-    const company = (analysis && analysis.company) || '';
+    const ticker = (analysis && analysis.ticker !== 'Update' ? analysis.ticker : '') || '';
+    const company = (analysis && analysis.company !== 'Manual entry' ? analysis.company : '') || '';
     const fullName = ticker + (company && company !== ticker ? ' — ' + company : '');
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 20px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(fullName || 'Swing Trade Idea', 22, barY + 26);
+    ctx.fillText(fullName || 'DJR Trading — Swing Idea', 22, barY + 26);
     ctx.fillStyle = sectorColor;
     ctx.font = 'bold 11px sans-serif';
     ctx.fillText(sectorLabel, 22, barY + 44);
