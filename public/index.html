@@ -1175,8 +1175,8 @@ function rejectVideo() {
   notify('Video rejected — edit your script and generate again', '');
 }
 
-// createVideo: uses FFmpeg WASM v0.11 — single thread, no SharedArrayBuffer needed
-// Uses older API that works without CORS worker restrictions
+// createVideo: FFmpeg WASM v0.11 with connected animations
+// Animations are driven by currentAnalysis data (ticker, entry, stop, target, trend)
 let ffmpegLoaded = false;
 
 async function loadFFmpegScript() {
@@ -1190,6 +1190,244 @@ async function loadFFmpegScript() {
   });
 }
 
+// Draw one animated frame of the video
+function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const progress = frameNum / totalFrames; // 0 to 1
+
+  // ── Background ────────────────────────────────────────────────────
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Chart image with slow zoom ────────────────────────────────────
+  if (chartImg) {
+    ctx.save();
+    // Zoom slowly from 1x to 1.15x over full duration
+    const zoom = 1 + 0.15 * progress;
+    const cx = W / 2, cy = H / 2;
+    ctx.translate(cx, cy);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-cx, -cy);
+    // Slight pan toward signal area (right side of chart)
+    const panX = -30 * progress;
+    ctx.drawImage(chartImg, panX, 0, W, H);
+    ctx.restore();
+  }
+
+  // ── Dark vignette overlay ─────────────────────────────────────────
+  const vignette = ctx.createRadialGradient(W/2, H/2, H*0.3, W/2, H/2, H*0.85);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Intro card (first 3 seconds = first 75 frames at 25fps) ──────
+  const introEnd = 0.08;
+  if (progress < introEnd) {
+    const p = progress / introEnd;
+    const slideIn = Math.min(1, p * 3);
+    const isBullish = analysis && analysis.trend === 'bullish';
+    const accentColor = isBullish ? '#22c55e' : '#ef4444';
+
+    ctx.save();
+    ctx.globalAlpha = slideIn;
+    // Full screen overlay
+    ctx.fillStyle = 'rgba(0,0,0,0.85)';
+    ctx.fillRect(0, 0, W, H);
+    // Accent bar left
+    ctx.fillStyle = accentColor;
+    ctx.fillRect(0, 0, 8, H);
+    // Channel name
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 52px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DJR IDEAS', W/2, H/2 - 30);
+    // Subtitle
+    ctx.font = '26px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText('Educational Swing Trading', W/2, H/2 + 20);
+    // Trend badge
+    ctx.fillStyle = accentColor;
+    const badgeW = 220, badgeH = 36;
+    ctx.beginPath();
+    ctx.roundRect(W/2 - badgeW/2, H/2 + 50, badgeW, badgeH, 18);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(isBullish ? 'BULLISH TREND' : 'BEARISH TREND', W/2, H/2 + 74);
+    ctx.restore();
+    return;
+  }
+
+  // ── Outro card (last 4 seconds) ───────────────────────────────────
+  const outroStart = 0.88;
+  if (progress > outroStart) {
+    const p = (progress - outroStart) / (1 - outroStart);
+    const fadeIn = Math.min(1, p * 2);
+    ctx.save();
+    ctx.globalAlpha = fadeIn;
+    ctx.fillStyle = 'rgba(0,0,0,0.88)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillRect(0, 0, 8, H);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 44px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DJR IDEAS', W/2, H/2 - 40);
+    ctx.font = '22px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillText('Like & Subscribe for more trade ideas', W/2, H/2 + 10);
+    ctx.font = '16px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText('Educational content only — not financial advice', W/2, H/2 + 50);
+    ctx.restore();
+    return;
+  }
+
+  // ── Main content section ──────────────────────────────────────────
+  // Normalize progress within main section
+  const mainProgress = (progress - introEnd) / (outroStart - introEnd);
+
+  // ── Animated price level lines ────────────────────────────────────
+  // Lines draw from left to right starting at different times
+  if (analysis) {
+    const levels = [];
+    if (analysis.entry) levels.push({ label: `Entry  $${analysis.entry}`, value: analysis.entry, color: '#3b82f6', delay: 0.1 });
+    if (analysis.stop)  levels.push({ label: `Stop   $${analysis.stop}`,  value: analysis.stop,  color: '#ef4444', delay: 0.2 });
+    if (analysis.target) levels.push({ label: `Target $${analysis.target}`, value: analysis.target, color: '#22c55e', delay: 0.3 });
+
+    // Estimate Y positions from chart (approximate based on typical chart layout)
+    // Chart price area is roughly between 15% and 85% of height
+    if (levels.length > 0) {
+      const values = levels.map(l => l.value).filter(Boolean);
+      const minV = Math.min(...values) * 0.995;
+      const maxV = Math.max(...values) * 1.005;
+      const range = maxV - minV || 1;
+
+      levels.forEach(({ label, value, color, delay }) => {
+        const lineProgress = Math.max(0, Math.min(1, (mainProgress - delay) / 0.3));
+        if (lineProgress <= 0) return;
+
+        // Map value to Y position (inverted — higher price = lower Y)
+        const yRatio = 1 - (value - minV) / range;
+        const y = H * 0.20 + yRatio * (H * 0.55);
+
+        ctx.save();
+        // Dashed line drawing from left
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(W * 0.02, y);
+        ctx.lineTo(W * 0.02 + lineProgress * W * 0.75, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label badge on right side
+        if (lineProgress > 0.7) {
+          const labelAlpha = (lineProgress - 0.7) / 0.3;
+          ctx.globalAlpha = labelAlpha;
+          const lx = W * 0.78;
+          const lw = 160, lh = 26;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.roundRect(lx, y - lh/2, lw, lh, 4);
+          ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.font = 'bold 13px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(label, lx + 8, y + 5);
+        }
+        ctx.restore();
+      });
+    }
+  }
+
+  // ── Signal highlight box (pulsing) ────────────────────────────────
+  if (mainProgress > 0.4 && mainProgress < 0.9) {
+    const pulse = 0.5 + 0.5 * Math.sin(mainProgress * 40);
+    ctx.save();
+    ctx.strokeStyle = `rgba(250,204,21,${0.5 + 0.4*pulse})`;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 4]);
+    // Highlight right portion of chart where recent signal is
+    ctx.strokeRect(W * 0.70, H * 0.25, W * 0.20, H * 0.45);
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // ── Lower third bar (slides up after intro) ───────────────────────
+  const ltDelay = 0.12;
+  const ltProgress = Math.max(0, Math.min(1, (mainProgress - ltDelay) / 0.25));
+  if (ltProgress > 0 && analysis) {
+    const barH = 64;
+    const barY = H - barH * ltProgress;
+
+    ctx.save();
+    // Bar background
+    ctx.fillStyle = 'rgba(0,0,0,0.88)';
+    ctx.fillRect(0, barY, W, barH);
+    // Blue accent strip
+    ctx.fillStyle = '#3b82f6';
+    ctx.fillRect(0, barY, 7, barH);
+
+    // Ticker + company
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'left';
+    const ticker = analysis.ticker || '';
+    const company = analysis.company || '';
+    ctx.fillText(`${ticker}${company ? ' — ' + company : ''}`, 22, barY + 26);
+
+    // Sector badge
+    const sectorLabel = currentSector === 'idea' ? 'SETUP IDEA' : currentSector === 'open' ? 'TRADE OPEN' : 'TRADE CLOSE';
+    const sectorColor = currentSector === 'idea' ? '#3b82f6' : currentSector === 'open' ? '#22c55e' : '#ef4444';
+    ctx.fillStyle = sectorColor;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText(sectorLabel, 22, barY + 46);
+
+    // Disclaimer
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = '13px sans-serif';
+    ctx.fillText('Educational content only — not financial advice', 22, barY + 58);
+
+    // Right side — levels if available
+    ctx.textAlign = 'right';
+    if (analysis.entry) {
+      ctx.fillStyle = '#3b82f6';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(`Entry $${analysis.entry}`, W - 20, barY + 22);
+    }
+    if (analysis.stop) {
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(`Stop $${analysis.stop}`, W - 20, barY + 40);
+    }
+    if (analysis.target) {
+      ctx.fillStyle = '#22c55e';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(`Target $${analysis.target}`, W - 170, barY + 22);
+    }
+    if (analysis.rr_ratio) {
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = '12px sans-serif';
+      ctx.fillText(`R:R ${parseFloat(analysis.rr_ratio).toFixed(1)}:1`, W - 170, barY + 40);
+    }
+    ctx.restore();
+  }
+
+  // ── Educational watermark ─────────────────────────────────────────
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#fff';
+  ctx.font = '13px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('Not financial advice — educational purposes only', W - 16, 28);
+  ctx.restore();
+}
+
 async function createVideo(canvas, audioBlob, onProgress) {
   document.getElementById('publish-status').textContent = 'Loading FFmpeg...';
   onProgress(0.05);
@@ -1198,41 +1436,94 @@ async function createVideo(canvas, audioBlob, onProgress) {
 
   const { createFFmpeg, fetchFile } = FFmpeg;
   const ffmpeg = createFFmpeg({
-    log: true,
+    log: false,
     corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
     progress: ({ ratio }) => {
-      if (ratio > 0) onProgress(0.3 + ratio * 0.65);
+      if (ratio > 0) onProgress(0.45 + ratio * 0.5);
     }
   });
 
-  document.getElementById('publish-status').textContent = 'Loading FFmpeg core... (~30 seconds first time)';
+  document.getElementById('publish-status').textContent = 'Loading FFmpeg core...';
   await ffmpeg.load();
+  onProgress(0.15);
+
+  // Get audio duration
+  const duration = await getAudioDuration(audioBlob);
+  const FPS = 25;
+  const totalFrames = Math.ceil(duration * FPS);
+
+  document.getElementById('publish-status').textContent = 'Rendering animation frames...';
+
+  // Set up render canvas at 1280x720
+  const W = 1280, H = 720;
+  const renderCanvas = document.createElement('canvas');
+  renderCanvas.width = W;
+  renderCanvas.height = H;
+
+  // Load chart image
+  let chartImg = null;
+  if (imageBase64) {
+    chartImg = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = 'data:' + (imageMime || 'image/jpeg') + ';base64,' + imageBase64;
+    });
+  }
+
+  // Render all frames as JPEGs and create a video from them
+  // Use a different approach: render frames to canvas, capture as PNG sequence
+  // Then pass to FFmpeg with concat
+
+  // Actually for FFmpeg WASM, easier to render frames in a loop and use rawvideo pipe
+  // We'll render to canvas at each frame time, get pixel data, and write as raw frames
 
   onProgress(0.2);
-  document.getElementById('publish-status').textContent = 'Preparing files...';
+  document.getElementById('publish-status').textContent = `Rendering ${totalFrames} frames...`;
 
-  // Convert canvas to JPEG
-  const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-  ffmpeg.FS('writeFile', 'image.jpg', await fetchFile(imageBlob));
+  // Write all frames as individual JPEGs
+  const BATCH = 25; // process in batches to avoid memory issues
+  let frameCount = 0;
+
+  const fileList = [];
+
+  for (let f = 0; f < totalFrames; f++) {
+    drawFrame(renderCanvas, chartImg, f, totalFrames, currentAnalysis);
+    const blob = await new Promise(r => renderCanvas.toBlob(r, 'image/jpeg', 0.85));
+    const buf = await blob.arrayBuffer();
+    const fname = `frame${String(f).padStart(5,'0')}.jpg`;
+    ffmpeg.FS('writeFile', fname, new Uint8Array(buf));
+    fileList.push(`file '${fname}'`);
+    frameCount++;
+
+    if (f % BATCH === 0) {
+      onProgress(0.2 + (f / totalFrames) * 0.22);
+      document.getElementById('publish-status').textContent = `Rendering frames... ${f}/${totalFrames}`;
+      await new Promise(r => setTimeout(r, 0)); // yield to browser
+    }
+  }
+
+  // Write file list
+  ffmpeg.FS('writeFile', 'frames.txt', fileList.join('\n'));
+
+  // Write audio
   ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(audioBlob));
 
-  onProgress(0.3);
-  document.getElementById('publish-status').textContent = 'Creating MP4... (takes 2-4 minutes)';
+  onProgress(0.43);
+  document.getElementById('publish-status').textContent = 'Encoding video...';
 
+  // Combine frames + audio
   await ffmpeg.run(
-    '-loop', '1',
-    '-i', 'image.jpg',
+    '-f', 'concat', '-safe', '0', '-i', 'frames.txt',
     '-i', 'audio.mp3',
     '-c:v', 'libx264',
-    '-tune', 'stillimage',
     '-preset', 'ultrafast',
-    '-crf', '28',
+    '-crf', '26',
     '-c:a', 'aac',
     '-b:a', '96k',
     '-pix_fmt', 'yuv420p',
     '-shortest',
     '-movflags', '+faststart',
-    '-vf', 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black',
     'output.mp4'
   );
 
@@ -1240,9 +1531,14 @@ async function createVideo(canvas, audioBlob, onProgress) {
   document.getElementById('publish-status').textContent = 'Finalizing...';
 
   const data = ffmpeg.FS('readFile', 'output.mp4');
-  ffmpeg.FS('unlink', 'image.jpg');
-  ffmpeg.FS('unlink', 'audio.mp3');
-  ffmpeg.FS('unlink', 'output.mp4');
+
+  // Cleanup
+  fileList.forEach((_, i) => {
+    try { ffmpeg.FS('unlink', `frame${String(i).padStart(5,'0')}.jpg`); } catch(e) {}
+  });
+  try { ffmpeg.FS('unlink', 'frames.txt'); } catch(e) {}
+  try { ffmpeg.FS('unlink', 'audio.mp3'); } catch(e) {}
+  try { ffmpeg.FS('unlink', 'output.mp4'); } catch(e) {}
 
   onProgress(1.0);
   return new Blob([data.buffer], { type: 'video/mp4' });
