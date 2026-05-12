@@ -6,8 +6,7 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const https = require('https');
-const http = require('http');
+const { EdgeTTS } = require('edge-tts-universal');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -44,74 +43,41 @@ function fetchBuffer(url) {
   });
 }
 
-// TTS — Google Translate TTS, no package needed
+// TTS — Microsoft Edge Neural Voice via edge-tts-universal
+// Free, no API key, no credit card, no limits
+// Uses en-US-GuyNeural — confident American male voice
 app.post('/tts', async (req, res) => {
   const tmpDir = os.tmpdir();
   const jobId = Date.now();
-  const outputPath = path.join(tmpDir, `tts_${jobId}.mp3`);
+  const mp3Path = path.join(tmpDir, `tts_${jobId}.mp3`);
 
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'Missing text' });
 
-    // Split into 180 char chunks
-    const words = text.split(' ');
-    const chunks = [];
-    let current = '';
-    for (const word of words) {
-      const test = current ? current + ' ' + word : word;
-      if (test.length > 170) {
-        if (current) chunks.push(current);
-        current = word;
-      } else {
-        current = test;
-      }
-    }
-    if (current) chunks.push(current);
+    console.log('TTS request, length:', text.length);
 
-    // Download each chunk
-    const chunkFiles = [];
-    for (let i = 0; i < chunks.length; i++) {
-      const encoded = encodeURIComponent(chunks[i]);
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encoded}&tl=en-gb&sl=en&client=tw-ob&ttsspeed=0.85`;
-      const buffer = await fetchBuffer(url);
-      const chunkPath = path.join(tmpDir, `chunk_${jobId}_${i}.mp3`);
-      fs.writeFileSync(chunkPath, buffer);
-      chunkFiles.push(chunkPath);
-      console.log(`Chunk ${i+1}/${chunks.length} downloaded, size: ${buffer.length}`);
-    }
+    const tts = new EdgeTTS(text, 'en-US-GuyNeural');
+    await tts.toFile(mp3Path);
 
-    // Combine with FFmpeg
-    if (chunkFiles.length === 1) {
-      fs.copyFileSync(chunkFiles[0], outputPath);
-    } else {
-      const listFile = path.join(tmpDir, `list_${jobId}.txt`);
-      fs.writeFileSync(listFile, chunkFiles.map(f => `file '${f}'`).join('\n'));
-      await new Promise((resolve, reject) => {
-        ffmpeg()
-          .input(listFile)
-          .inputOptions(['-f concat', '-safe 0'])
-          .outputOptions(['-c copy'])
-          .output(outputPath)
-          .on('end', resolve)
-          .on('error', reject)
-          .run();
-      });
-      fs.unlinkSync(listFile);
-    }
-
-    const audioBuffer = fs.readFileSync(outputPath);
+    const audioBuffer = fs.readFileSync(mp3Path);
     console.log('TTS done, size:', audioBuffer.length);
-    res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': audioBuffer.length, 'Access-Control-Allow-Origin': '*' });
+
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length,
+      'Access-Control-Allow-Origin': '*'
+    });
     res.send(audioBuffer);
 
   } catch(err) {
     console.error('TTS error:', err.message);
     res.status(500).json({ error: err.message });
   } finally {
-    try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch(e) {}
+    try { if (fs.existsSync(mp3Path)) fs.unlinkSync(mp3Path); } catch(e) {}
   }
 });
+
 
 // Video creation
 app.post('/create-video', upload.fields([
