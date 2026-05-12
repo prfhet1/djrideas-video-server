@@ -1212,15 +1212,23 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
   // ── Chart image with slow zoom ────────────────────────────────────
   if (chartImg) {
     ctx.save();
-    // Zoom slowly from 1x to 1.15x over full duration
-    const zoom = 1 + 0.15 * progress;
+    // Zoom slowly from 1x to 1.08x — subtle and clean
+    const zoom = 1 + 0.08 * progress;
     const cx = W / 2, cy = H / 2;
     ctx.translate(cx, cy);
     ctx.scale(zoom, zoom);
     ctx.translate(-cx, -cy);
-    // Slight pan toward signal area (right side of chart)
-    const panX = -30 * progress;
-    ctx.drawImage(chartImg, panX, 0, W, H);
+    // Draw image to fill canvas maintaining aspect ratio (cover)
+    const imgW = chartImg.naturalWidth || chartImg.width;
+    const imgH = chartImg.naturalHeight || chartImg.height;
+    const scale = Math.max(W / imgW, H / imgH);
+    const dw = imgW * scale;
+    const dh = imgH * scale;
+    const dx = (W - dw) / 2;
+    const dy = (H - dh) / 2;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(chartImg, dx, dy, dw, dh);
     ctx.restore();
   }
 
@@ -1354,18 +1362,7 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     }
   }
 
-  // ── Signal highlight box (pulsing) ────────────────────────────────
-  if (mainProgress > 0.4 && mainProgress < 0.9) {
-    const pulse = 0.5 + 0.5 * Math.sin(mainProgress * 40);
-    ctx.save();
-    ctx.strokeStyle = `rgba(250,204,21,${0.5 + 0.4*pulse})`;
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([8, 4]);
-    // Highlight right portion of chart where recent signal is
-    ctx.strokeRect(W * 0.70, H * 0.25, W * 0.20, H * 0.45);
-    ctx.setLineDash([]);
-    ctx.restore();
-  }
+
 
   // ── Lower third bar (slides up after intro) ───────────────────────
   const ltDelay = 0.12;
@@ -1498,7 +1495,7 @@ async function createVideo(canvas, audioBlob, onProgress) {
 
   for (let f = 0; f < totalFrames; f++) {
     drawFrame(renderCanvas, chartImg, f, totalFrames, currentAnalysis);
-    const blob = await new Promise(r => renderCanvas.toBlob(r, 'image/jpeg', 0.85));
+    const blob = await new Promise(r => renderCanvas.toBlob(r, 'image/jpeg', 0.97));
     const buf = await blob.arrayBuffer();
     const fname = `frame${String(f).padStart(5,'0')}.jpg`;
     ffmpeg.FS('writeFile', fname, new Uint8Array(buf));
