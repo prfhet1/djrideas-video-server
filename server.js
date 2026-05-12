@@ -6,7 +6,6 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { EdgeTTS } = require('edge-tts-universal');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -57,8 +56,17 @@ app.post('/tts', async (req, res) => {
 
     console.log('TTS request, length:', text.length);
 
-    const tts = new EdgeTTS(text, 'en-US-GuyNeural');
-    await tts.toFile(mp3Path);
+    // edge-tts-universal uses Communicate class
+    const { Communicate } = require('edge-tts-universal');
+    const communicate = new Communicate(text, { voice: 'en-US-GuyNeural' });
+    const chunks = [];
+    for await (const chunk of communicate.stream()) {
+      if (chunk.type === 'audio' && chunk.data) {
+        chunks.push(chunk.data);
+      }
+    }
+    const audioData = Buffer.concat(chunks);
+    fs.writeFileSync(mp3Path, audioData);
 
     const audioBuffer = fs.readFileSync(mp3Path);
     console.log('TTS done, size:', audioBuffer.length);
