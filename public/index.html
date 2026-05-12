@@ -1175,6 +1175,15 @@ function rejectVideo() {
   notify('Video rejected — edit your script and generate again', '');
 }
 
+function getAudioDuration(blob) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(audio.duration || 60); };
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(60); };
+  });
+}
+
 // createVideo: FFmpeg WASM v0.11 with connected animations
 // Animations are driven by currentAnalysis data (ticker, entry, stop, target, trend)
 let ffmpegLoaded = false;
