@@ -44,21 +44,30 @@ function fetchBuffer(url) {
 
 // TTS — Microsoft Edge Neural Voice via edge-tts-universal
 // Free, no API key, no credit card, no limits
-// Uses en-US-GuyNeural — confident American male voice
+// Supports multiple voices per persona
 app.post('/tts', async (req, res) => {
   const tmpDir = os.tmpdir();
   const jobId = Date.now();
   const mp3Path = path.join(tmpDir, `tts_${jobId}.mp3`);
 
   try {
-    const { text } = req.body;
+    const { text, voice } = req.body;
     if (!text) return res.status(400).json({ error: 'Missing text' });
 
-    console.log('TTS request, length:', text.length);
+    // Allowed voices — mapped to personas
+    const allowedVoices = [
+      'en-US-GuyNeural',    // Technical — confident American male
+      'en-US-AriaNeural',   // Fundamental — warm authoritative female
+      'en-US-DavisNeural',  // Educational — friendly approachable male
+      'en-US-TonyNeural',   // bonus option
+      'en-US-JasonNeural',  // bonus option
+    ];
+    const selectedVoice = allowedVoices.includes(voice) ? voice : 'en-US-GuyNeural';
 
-    // edge-tts-universal uses Communicate class
+    console.log(`TTS request — voice: ${selectedVoice}, length: ${text.length}`);
+
     const { Communicate } = require('edge-tts-universal');
-    const communicate = new Communicate(text, { voice: 'en-US-GuyNeural' });
+    const communicate = new Communicate(text, { voice: selectedVoice });
     const chunks = [];
     for await (const chunk of communicate.stream()) {
       if (chunk.type === 'audio' && chunk.data) {
@@ -69,7 +78,7 @@ app.post('/tts', async (req, res) => {
     fs.writeFileSync(mp3Path, audioData);
 
     const audioBuffer = fs.readFileSync(mp3Path);
-    console.log('TTS done, size:', audioBuffer.length);
+    console.log(`TTS done — voice: ${selectedVoice}, size: ${audioBuffer.length}`);
 
     res.set({
       'Content-Type': 'audio/mpeg',
