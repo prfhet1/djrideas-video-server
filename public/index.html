@@ -1922,8 +1922,17 @@ async function approveAndUpload() {
   try {
     const ticker = currentAnalysis.ticker || 'Trade';
     const company = currentAnalysis.company || '';
-    const sectorLabel = currentSector === 'idea' ? 'Setup idea' : currentSector === 'open' ? 'Trade open' : currentSector === 'close' ? 'Trade close' : 'Educational update';
-    const title = `${ticker} — ${sectorLabel} | DJR Trading`;
+    const entryStr  = currentAnalysis.entry    ? ` | Entry $${parseFloat(currentAnalysis.entry).toFixed(2)}`   : '';
+    const stopStr   = currentAnalysis.stop     ? ` | Stop $${parseFloat(currentAnalysis.stop).toFixed(2)}`    : '';
+    const targetStr = currentAnalysis.target   ? ` | Target $${parseFloat(currentAnalysis.target).toFixed(2)}` : '';
+    const rrStr     = currentAnalysis.rr_ratio ? ` | ${parseFloat(currentAnalysis.rr_ratio).toFixed(1)}:1 R:R` : '';
+    const moveStr   = currentAnalysis.move_pct ? ` | ${parseFloat(currentAnalysis.move_pct).toFixed(1)}% Move`  : '';
+
+    const title = currentSector === 'idea'
+      ? `${ticker} — Swing Trade Setup | DJR Trading`
+      : currentSector === 'open'
+      ? `${ticker} — Trade Open${entryStr}${stopStr}${targetStr} | DJR Trading`
+      : `${ticker} — Trade Close${rrStr}${moveStr} | DJR Trading`;
     const hook = currentSector === 'idea'  ? `📊 Breaking down a ${currentAnalysis.trend} setup on ${ticker} (${company}). Here is what the strategy is showing and what I am watching for.` :
                  currentSector === 'open'  ? `🟢 Trade opened on ${ticker} (${company}). Full breakdown of the entry, stop, and target — and why this setup met all strategy criteria.` :
                                              `🔴 Trade closed on ${ticker} (${company}). Here is what happened, why we closed, and what this teaches us about managing trades.`;
