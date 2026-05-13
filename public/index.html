@@ -1680,18 +1680,17 @@ async function createVideo(canvas, audioBlob, onProgress) {
 
   document.getElementById('publish-status').textContent = 'Rendering animation frames...';
 
-  // Set up render canvas at 1920x1080 — full HD for maximum quality
-  const W = 1920, H = 1080;
+  // 1280x720 — stable in browser WASM, YouTube upscales cleanly
+  const W = 1280, H = 720;
   const renderCanvas = document.createElement('canvas');
   renderCanvas.width = W;
   renderCanvas.height = H;
 
-  // Load chart image — decode at full native resolution
+  // Load chart image at native resolution for sharp drawing
   let chartImg = null;
   if (imageBase64) {
     chartImg = await new Promise((resolve) => {
       const img = new Image();
-      img.decoding = 'sync';
       img.onload = () => resolve(img);
       img.onerror = () => resolve(null);
       img.src = 'data:' + (imageMime || 'image/png') + ';base64,' + imageBase64;
@@ -1699,22 +1698,19 @@ async function createVideo(canvas, audioBlob, onProgress) {
   }
 
   onProgress(0.2);
-  document.getElementById('publish-status').textContent = `Rendering ${totalFrames} frames at 1080p...`;
+  document.getElementById('publish-status').textContent = `Rendering ${totalFrames} frames...`;
 
-  // Write all frames as high-quality JPEGs
-  const BATCH = 25; // process in batches to avoid memory issues
-  let frameCount = 0;
-
+  // Write frames as JPEGs — quality 0.95 is visually lossless at 720p
+  const BATCH = 15; // smaller batch = more yields = browser stays responsive
   const fileList = [];
 
   for (let f = 0; f < totalFrames; f++) {
     drawFrame(renderCanvas, chartImg, f, totalFrames, currentAnalysis);
-    const blob = await new Promise(r => renderCanvas.toBlob(r, 'image/jpeg', 1.0)); // max quality
+    const blob = await new Promise(r => renderCanvas.toBlob(r, 'image/jpeg', 0.95));
     const buf = await blob.arrayBuffer();
     const fname = `frame${String(f).padStart(5,'0')}.jpg`;
     ffmpeg.FS('writeFile', fname, new Uint8Array(buf));
     fileList.push(`file '${fname}'`);
-    frameCount++;
 
     if (f % BATCH === 0) {
       onProgress(0.2 + (f / totalFrames) * 0.22);
@@ -1730,17 +1726,17 @@ async function createVideo(canvas, audioBlob, onProgress) {
   ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(audioBlob));
 
   onProgress(0.43);
-  document.getElementById('publish-status').textContent = 'Encoding video at 1080p...';
+  document.getElementById('publish-status').textContent = 'Encoding video...';
 
-  // Combine frames + audio — maximum quality settings
+  // Encode — CRF 20 + fast preset = great quality + finishes in reasonable time in WASM
   await ffmpeg.run(
     '-f', 'concat', '-safe', '0', '-i', 'frames.txt',
     '-i', 'audio.mp3',
     '-c:v', 'libx264',
-    '-preset', 'medium',      // better compression than ultrafast
-    '-crf', '18',              // near-lossless (18=excellent, 23=default, 26=ok)
+    '-preset', 'fast',
+    '-crf', '20',
     '-c:a', 'aac',
-    '-b:a', '192k',            // high quality audio
+    '-b:a', '128k',
     '-pix_fmt', 'yuv420p',
     '-shortest',
     '-movflags', '+faststart',
