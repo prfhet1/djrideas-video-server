@@ -626,66 +626,36 @@ function connectYoutube() {
     notify('Enter your OAuth Client ID and Secret first', 'error');
     return;
   }
-  const w = 500, h = 650;
-  const left = screen.width/2 - w/2;
-  const top  = screen.height/2 - h/2;
+  // Save credentials so we can use them after redirect comes back
   const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret });
-  const popup = window.open(
-    SERVER + '/oauth/start?' + params.toString(),
-    'youtube-oauth',
-    `width=${w},height=${h},left=${left},top=${top}`
-  );
-
-  function handleToken(accessToken, refreshToken, channelName, avatar) {
-    localStorage.setItem('key_yt-access-token',  accessToken);
-    localStorage.setItem('key_yt-refresh-token', refreshToken || '');
-    localStorage.setItem('key_yt-channel-name',  channelName  || '');
-    localStorage.setItem('key_yt-avatar',        avatar       || '');
-    updateYouTubeUI();
-    updateDots();
-    notify('YouTube connected ✓', 'success');
-    if (popup && !popup.closed) popup.close();
-    console.log('YT token saved:', localStorage.getItem('key_yt-access-token')?.substring(0,20));
-  }
-
-  // Method 1: direct localStorage write from popup via window.opener (same origin)
-  window.addEventListener('yt-token-saved', () => {
-    updateYouTubeUI();
-    updateDots();
-    notify('YouTube connected ✓', 'success');
-    if (popup && !popup.closed) popup.close();
-  }, { once: true });
-
-  // Method 2: postMessage
-  const msgListener = (e) => {
-    if (e.data?.type === 'youtube-auth-success') {
-      window.removeEventListener('message', msgListener);
-      clearInterval(pollInterval);
-      handleToken(e.data.accessToken, e.data.refreshToken, e.data.channelName, e.data.avatar);
-    } else if (e.data?.type === 'youtube-auth-error') {
-      window.removeEventListener('message', msgListener);
-      clearInterval(pollInterval);
-      notify('YouTube auth error: ' + e.data.error, 'error');
-    }
-  };
-  window.addEventListener('message', msgListener);
-
-  // Method 3: server poll every 2s
-  const pollInterval = setInterval(async () => {
-    if (!popup || popup.closed) { clearInterval(pollInterval); return; }
-    try {
-      const r = await fetch(SERVER + '/oauth/token-ready', { cache: 'no-store' });
-      if (r.ok) {
-        const data = await r.json();
-        if (data.accessToken) {
-          clearInterval(pollInterval);
-          window.removeEventListener('message', msgListener);
-          handleToken(data.accessToken, data.refreshToken, data.channelName, data.avatar);
-        }
-      }
-    } catch(e) { console.log('Poll error:', e.message); }
-  }, 2000);
+  // Full page redirect — no popup, no postMessage, no serviceworker interference
+  window.location.href = SERVER + '/oauth/start?' + params.toString();
 }
+
+// On page load — check if we just came back from OAuth with token in URL hash or query
+function checkOAuthReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const hash   = new URLSearchParams(window.location.hash.replace('#',''));
+  const token  = params.get('yt_access_token') || hash.get('yt_access_token');
+  if (token) {
+    localStorage.setItem('key_yt-access-token',  token);
+    localStorage.setItem('key_yt-refresh-token', params.get('yt_refresh_token') || '');
+    localStorage.setItem('key_yt-channel-name',  decodeURIComponent(params.get('yt_channel_name') || ''));
+    localStorage.setItem('key_yt-avatar',        decodeURIComponent(params.get('yt_avatar')       || ''));
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
+    updateYouTubeUI();
+    updateDots();
+    // Go straight to settings page
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-settings').classList.add('active');
+    loadSettings();
+    notify('YouTube connected ✓', 'success');
+    console.log('Token saved from redirect:', localStorage.getItem('key_yt-access-token')?.substring(0,20));
+  }
+}
+
 
 
 function checkYouTubeToken() {
@@ -1962,6 +1932,7 @@ function saveAllSettings() {
 
 // ─── Init ─────────────────────────────────────────────────
 updateDots();
+checkOAuthReturn();
 </script>
 </body>
 </html>
