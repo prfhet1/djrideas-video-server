@@ -1516,6 +1516,28 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
   }
 }
 
+// ─── FFmpeg + Audio helpers ───────────────────────────────
+let ffmpegLoaded = false;
+
+async function loadFFmpegScript() {
+  if (ffmpegLoaded) return;
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
+    s.onload = () => { ffmpegLoaded = true; resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+function getAudioDuration(blob) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(audio.duration || 60); };
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(60); };
+  });
+}
 
 async function createVideo(canvas, audioBlob, onProgress) {
   document.getElementById('publish-status').textContent = 'Loading FFmpeg...';
