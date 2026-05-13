@@ -1492,44 +1492,93 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     ctx.drawImage(chartImg, (W-dw)/2, (H-dh)/2, dw, dh);
   }
 
-  // INTRO CARD
-  const introEnd = 0.09;
+  // INTRO CARD — 4% of video (was 9%) = ~2.5s for a 60s video
+  const introEnd = 0.04;
   if (progress < introEnd) {
-    const fadeIn = Math.min(1, (progress / introEnd) * 4);
+    const fadeIn = Math.min(1, (progress / introEnd) * 3);
     const isBullish = !analysis || analysis.trend !== 'bearish';
-    const accentColor = isBullish ? '#22c55e' : '#ef4444';
+    const ticker = (analysis?.ticker || '').toUpperCase();
+
+    // Module-specific design
+    const moduleConfig = {
+      idea:  { label: 'TRADE IDEA ON',   bg1: '#0a0e1a', bg2: '#0d1829', accent: '#3b82f6', accent2: '#60a5fa', pill: '#1e3a5f', pillText: '#60a5fa', tag: '💡 SETUP ANALYSIS' },
+      open:  { label: 'TRADE OPENING ON', bg1: '#030f08', bg2: '#041a0d', accent: '#22c55e', accent2: '#4ade80', pill: '#0f2d1a', pillText: '#4ade80', tag: '🟢 TRADE ACTIVE'   },
+      close: { label: 'TRADE RESUME ON',  bg1: '#0f0505', bg2: '#1a0808', accent: '#ef4444', accent2: '#f87171', pill: '#2d0f0f', pillText: '#f87171', tag: '🔴 TRADE CLOSED'   }
+    };
+    const mc = moduleConfig[currentSector] || moduleConfig.idea;
+
     ctx.save();
     ctx.globalAlpha = fadeIn;
-    ctx.fillStyle = 'rgba(0,0,0,0.92)';
+
+    // Background gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, mc.bg1);
+    bgGrad.addColorStop(1, mc.bg2);
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = isBullish ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+
+    // Subtle radial glow behind logo
+    const glow = ctx.createRadialGradient(W/2, H*0.38, 0, W/2, H*0.38, H*0.35);
+    glow.addColorStop(0, mc.accent + '22');
+    glow.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow;
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = accentColor;
-    ctx.fillRect(0, 0, 10, H);
 
-    // Draw logo in intro center
-    const logoSize = Math.round(H * 0.32);
-    drawLogoOnCanvas(ctx, W/2, H/2 - H*0.12, logoSize);
+    // Left accent bar
+    const barGrad = ctx.createLinearGradient(0, 0, 0, H);
+    barGrad.addColorStop(0, mc.accent);
+    barGrad.addColorStop(1, mc.accent + '44');
+    ctx.fillStyle = barGrad;
+    ctx.fillRect(0, 0, 8, H);
 
-    // Swing Trading tagline only (no DJR text — logo already has it)
-    ctx.font = `300 ${Math.round(H*0.028)}px "Helvetica Neue", Arial`;
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText('Swing Trading  ·  Ideas  ·  Analysis', W/2, H/2 + H*0.1);
+    // DJR Logo — top center, smaller
+    const logoSize = Math.round(H * 0.22);
+    drawLogoOnCanvas(ctx, W/2, H * 0.32, logoSize);
 
-    // Trend pill — text properly centered
-    const pillW = 300, pillH = 52;
-    const pillX = W/2 - pillW/2;
-    const pillY = H/2 + H*0.185;
-    ctx.fillStyle = accentColor;
+    // Module tag pill — above main title
+    const tagW = 280, tagH = 36;
+    const tagX = W/2 - tagW/2;
+    const tagY = H * 0.535;
+    ctx.fillStyle = mc.pill;
     ctx.beginPath();
-    ctx.roundRect(pillX, pillY, pillW, pillH, 26);
+    ctx.roundRect(tagX, tagY, tagW, tagH, 18);
     ctx.fill();
-    ctx.fillStyle = '#000';
-    ctx.font = `bold ${Math.round(H*0.026)}px "Helvetica Neue", Arial`;
+    ctx.strokeStyle = mc.accent + '88';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = mc.pillText;
+    ctx.font = `600 ${Math.round(H*0.022)}px "Helvetica Neue", Arial`;
+    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(isBullish ? '↑  BULLISH TREND' : '↓  BEARISH TREND', W/2, pillY + pillH/2);
+    ctx.fillText(mc.tag, W/2, tagY + tagH/2);
+
+    // "DJR TRADE IDEA ON" label
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = `300 ${Math.round(H*0.032)}px "Helvetica Neue", Arial`;
+    ctx.textBaseline = 'top';
+    ctx.fillText('DJR ' + mc.label, W/2, H * 0.615);
+
+    // TICKER — large, bold, accent colored
+    ctx.font = `900 ${Math.round(H*0.13)}px "Arial Black", Arial Black, sans-serif`;
+    ctx.fillStyle = mc.accent2;
+    // Glow effect on ticker
+    ctx.shadowColor = mc.accent;
+    ctx.shadowBlur = 30;
+    ctx.fillText('$' + (ticker || '—'), W/2, H * 0.67);
+    ctx.shadowBlur = 0;
+
+    // Bottom divider line
+    ctx.strokeStyle = mc.accent + '44';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.2, H * 0.88);
+    ctx.lineTo(W * 0.8, H * 0.88);
+    ctx.stroke();
+
+    // Bottom tagline
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.font = `300 ${Math.round(H*0.02)}px "Helvetica Neue", Arial`;
+    ctx.fillText('djrideas.onrender.com  ·  Educational content only', W/2, H * 0.915);
 
     ctx.restore();
     return;
@@ -1667,6 +1716,16 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     }
     ctx.restore();
   }
+}
+
+// Generate thumbnail — renders frame 0 (intro card) at full quality as JPEG blob
+async function generateThumbnailBlob() {
+  const W = 1280, H = 720;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  // Draw frame 0 = pure intro card, no chart image needed for thumbnail
+  drawFrame(canvas, null, 0, 100, currentAnalysis);
+  return new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.97));
 }
 
 // ─── FFmpeg + Audio helpers ───────────────────────────────
@@ -1810,11 +1869,27 @@ async function approveAndUpload() {
 
   try {
     const ticker = currentAnalysis.ticker || 'Trade';
+    const company = currentAnalysis.company || '';
     const sectorLabel = currentSector === 'idea' ? 'Setup idea' : currentSector === 'open' ? 'Trade open' : currentSector === 'close' ? 'Trade close' : 'Educational update';
-    const title = `${ticker} — ${sectorLabel} | Educational swing trade analysis`;
-    const description = `${currentAnalysis.youtube}\n\n⚠️ DISCLAIMER: This video is for educational and informational purposes only. It does not constitute financial advice, investment recommendations, or solicitation to buy or sell any securities. Always conduct your own research and consult with a licensed financial advisor before making any investment decisions. Past performance is not indicative of future results.`;
+    const title = `${ticker} — ${sectorLabel} | DJR Trading`;
+    const hook = currentSector === 'idea'  ? `📊 Breaking down a ${currentAnalysis.trend} setup on ${ticker} (${company}). Here is what the strategy is showing and what I am watching for.` :
+                 currentSector === 'open'  ? `🟢 Trade opened on ${ticker} (${company}). Full breakdown of the entry, stop, and target — and why this setup met all strategy criteria.` :
+                                             `🔴 Trade closed on ${ticker} (${company}). Here is what happened, why we closed, and what this teaches us about managing trades.`;
+    const description = `${hook}\n\n${currentAnalysis.youtube}\n\n⚠️ DISCLAIMER: This video is for educational and informational purposes only. It does not constitute financial advice, investment recommendations, or solicitation to buy or sell any securities. Always conduct your own research and consult with a licensed financial advisor before making any investment decisions. Past performance is not indicative of future results.\n\n#SwingTrading #StockMarket #TechnicalAnalysis #${ticker} #TradingEducation #DJRTrading #LearnToTrade`;
 
     const result = await uploadToYoutube(null, generatedVideoBlob, title, description);
+    fill.style.width = '90%';
+
+    // Upload thumbnail — intro card as official video thumbnail
+    try {
+      status.textContent = 'Setting thumbnail...';
+      const thumbBlob = await generateThumbnailBlob();
+      await uploadThumbnail(result.videoId, thumbBlob);
+      console.log('Thumbnail uploaded ✓');
+    } catch(e) {
+      console.warn('Thumbnail upload failed (non-critical):', e.message);
+    }
+
     fill.style.width = '100%';
     const ytUrl = result.url || 'https://studio.youtube.com';
     status.innerHTML = `Published to YouTube ✓ — <a href="${ytUrl}" target="_blank" style="color:var(--blue);">View video</a>`;
@@ -1879,12 +1954,26 @@ async function uploadToYoutube(apiKey, videoBlob, title, description) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    // Token expired — clear it so user reconnects
     if (res.status === 401) {
       disconnectYoutube();
       throw new Error('YouTube session expired — please reconnect in Settings.');
     }
     throw new Error(err.error || 'YouTube upload failed');
+  }
+  return res.json();
+}
+
+async function uploadThumbnail(videoId, thumbBlob) {
+  const token = getKey('yt-access-token');
+  if (!token || !videoId) return;
+  const formData = new FormData();
+  formData.append('thumbnail', thumbBlob, 'thumbnail.jpg');
+  formData.append('accessToken', token);
+  formData.append('videoId', videoId);
+  const res = await fetch(SERVER + '/upload-thumbnail', { method: 'POST', body: formData });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Thumbnail upload failed');
   }
   return res.json();
 }
