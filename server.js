@@ -6,6 +6,8 @@ const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const https = require('https');
+const querystring = require('querystring');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -14,37 +16,29 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+// Cookie parser (simple inline — no extra dep needed)
+app.use((req, res, next) => {
+  req.cookies = {};
+  const header = req.headers.cookie || '';
+  header.split(';').forEach(pair => {
+    const [k, ...v] = pair.trim().split('=');
+    if (k) req.cookies[k.trim()] = decodeURIComponent(v.join('='));
+  });
+  next();
+});
 
+const storage = multer.memoryStorage();
+const upload = multer({ storage, limits: { fileSize: 200 * 1024 * 1024 } });
+
+// ─── Health ───────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'DJR Ideas Video Server running' });
 });
 
-// Fetch a URL and return buffer
-function fetchBuffer(url) {
-  return new Promise((resolve, reject) => {
-    const protocol = url.startsWith('https') ? https : http;
-    protocol.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://translate.google.com',
-        'Accept': '*/*'
-      }
-    }, (res) => {
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
-      res.on('end', () => resolve(Buffer.concat(chunks)));
-      res.on('error', reject);
-    }).on('error', reject);
-  });
-}
-
-// TTS — Microsoft Edge Neural Voice via edge-tts-universal
-// Free, no API key, no credit card, no limits
-// Supports multiple voices per persona
+// ─── TTS ─────────────────────────────────────────────────
 app.post('/tts', async (req, res) => {
   const tmpDir = os.tmpdir();
   const jobId = Date.now();
@@ -54,62 +48,47 @@ app.post('/tts', async (req, res) => {
     const { text, voice } = req.body;
     if (!text) return res.status(400).json({ error: 'Missing text' });
 
-    // Allowed voices — mapped to personas
     const allowedVoices = [
-      'en-US-GuyNeural',    // Technical — confident American male
-      'en-US-AriaNeural',   // Fundamental — warm authoritative female
-      'en-US-DavisNeural',  // Educational — friendly approachable male
-      'en-US-TonyNeural',   // bonus option
-      'en-US-JasonNeural',  // bonus option
+      'en-US-GuyNeural',
+      'en-US-AriaNeural',
+      'en-US-DavisNeural',
+      'en-US-TonyNeural',
+      'en-US-JasonNeural',
     ];
     const selectedVoice = allowedVoices.includes(voice) ? voice : 'en-US-GuyNeural';
-
     console.log(`TTS request — voice: ${selectedVoice}, length: ${text.length}`);
 
     const { Communicate } = require('edge-tts-universal');
-
-    // Retry up to 3 times — Microsoft Edge TTS can transiently fail
     let audioData = null;
     let lastError = null;
-    const MAX_RETRIES = 3;
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        console.log(`TTS attempt ${attempt}/${MAX_RETRIES}...`);
+        console.log(`TTS attempt ${attempt}/3...`);
         const communicate = new Communicate(text, { voice: selectedVoice });
         const chunks = [];
         for await (const chunk of communicate.stream()) {
-          if (chunk.type === 'audio' && chunk.data) {
-            chunks.push(chunk.data);
-          }
+          if (chunk.type === 'audio' && chunk.data) chunks.push(chunk.data);
         }
         if (chunks.length === 0) throw new Error('No audio was received.');
         audioData = Buffer.concat(chunks);
-        console.log(`TTS attempt ${attempt} succeeded — size: ${audioData.length}`);
-        break; // success — exit retry loop
+        break;
       } catch (err) {
         lastError = err;
         console.warn(`TTS attempt ${attempt} failed: ${err.message}`);
-        if (attempt < MAX_RETRIES) {
-          // Wait 1.5s before retrying
-          await new Promise(r => setTimeout(r, 1500));
-        }
+        if (attempt < 3) await new Promise(r => setTimeout(r, 1500));
       }
     }
 
     if (!audioData || audioData.length === 0) {
-      throw new Error(`TTS failed after ${MAX_RETRIES} attempts: ${lastError?.message || 'No audio received'}`);
+      throw new Error(`TTS failed after 3 attempts: ${lastError?.message}`);
     }
 
     fs.writeFileSync(mp3Path, audioData);
     const audioBuffer = fs.readFileSync(mp3Path);
-    console.log(`TTS done — voice: ${selectedVoice}, size: ${audioBuffer.length}`);
+    console.log(`TTS done — size: ${audioBuffer.length}`);
 
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Content-Length': audioBuffer.length,
-      'Access-Control-Allow-Origin': '*'
-    });
+    res.set({ 'Content-Type': 'audio/mpeg', 'Content-Length': audioBuffer.length, 'Access-Control-Allow-Origin': '*' });
     res.send(audioBuffer);
 
   } catch(err) {
@@ -120,125 +99,162 @@ app.post('/tts', async (req, res) => {
   }
 });
 
+// ─── YouTube OAuth 2.0 ────────────────────────────────────
+const OAUTH_REDIRECT = 'https://djrideas-video-server.onrender.com/oauth/callback';
+const OAUTH_SCOPES   = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly';
 
-// Video creation
-app.post('/create-video', upload.fields([
-  { name: 'image', maxCount: 1 },
-  { name: 'audio', maxCount: 1 }
-]), async (req, res) => {
-  const tmpDir = os.tmpdir();
-  const jobId = Date.now();
-  const imagePath = path.join(tmpDir, `image_${jobId}.jpg`);
-  const audioPath = path.join(tmpDir, `audio_${jobId}.mp3`);
-  const outputPath = path.join(tmpDir, `output_${jobId}.mp4`);
+// Step 1 — browser sends client_id + secret, we store in cookies and redirect to Google
+app.get('/oauth/start', (req, res) => {
+  const clientId     = req.query.client_id;
+  const clientSecret = req.query.client_secret;
+  if (!clientId || !clientSecret) return res.status(400).send('Missing client_id or client_secret');
+
+  // Store in httpOnly cookies so callback can use them
+  const cookieOpts = 'HttpOnly; SameSite=Lax; Path=/; Max-Age=300';
+  res.setHeader('Set-Cookie', [
+    `oauth_cid=${encodeURIComponent(clientId)}; ${cookieOpts}`,
+    `oauth_cs=${encodeURIComponent(clientSecret)}; ${cookieOpts}`
+  ]);
+
+  const params = querystring.stringify({
+    client_id:     clientId,
+    redirect_uri:  OAUTH_REDIRECT,
+    response_type: 'code',
+    scope:         OAUTH_SCOPES,
+    access_type:   'offline',
+    prompt:        'consent'
+  });
+  res.redirect('https://accounts.google.com/o/oauth2/v2/auth?' + params);
+});
+
+// Step 2 — Google redirects back with ?code=
+app.get('/oauth/callback', async (req, res) => {
+  const { code, error } = req.query;
+
+  const closeWithError = (msg) => res.send(
+    `<script>window.opener&&window.opener.postMessage({type:'youtube-auth-error',error:${JSON.stringify(msg)}},'*');window.close();</script>`
+  );
+
+  if (error || !code) return closeWithError(error || 'cancelled');
+
+  const clientId     = decodeURIComponent(req.cookies.oauth_cid     || '');
+  const clientSecret = decodeURIComponent(req.cookies.oauth_cs      || '');
+
+  if (!clientId || !clientSecret) return closeWithError('Session expired — please try connecting again');
 
   try {
-    if (!req.files || !req.files.image || !req.files.audio) {
-      return res.status(400).json({ error: 'Missing image or audio' });
-    }
-
-    fs.writeFileSync(imagePath, req.files.image[0].buffer);
-    fs.writeFileSync(audioPath, req.files.audio[0].buffer);
-
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(imagePath)
-        .inputOptions(['-loop 1'])
-        .input(audioPath)
-        .outputOptions([
-          '-c:v libx264', '-tune stillimage', '-preset ultrafast', '-crf 28',
-          '-c:a aac', '-b:a 96k', '-pix_fmt yuv420p', '-shortest', '-movflags +faststart',
-          '-vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black'
-        ])
-        .output(outputPath)
-        .on('end', resolve)
-        .on('error', reject)
-        .run();
+    // Exchange code for tokens
+    const tokenBody = querystring.stringify({
+      code,
+      client_id:     clientId,
+      client_secret: clientSecret,
+      redirect_uri:  OAUTH_REDIRECT,
+      grant_type:    'authorization_code'
     });
 
-    const mp4Buffer = fs.readFileSync(outputPath);
-    res.set({ 'Content-Type': 'video/mp4', 'Content-Disposition': 'attachment; filename="trade-video.mp4"', 'Content-Length': mp4Buffer.length, 'Access-Control-Allow-Origin': '*' });
-    res.send(mp4Buffer);
+    const tokenData = await new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'oauth2.googleapis.com',
+        path: '/token',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(tokenBody) }
+      }, (res) => {
+        let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(JSON.parse(d)));
+      });
+      r.on('error', reject); r.write(tokenBody); r.end();
+    });
+
+    if (tokenData.error) throw new Error(tokenData.error_description || tokenData.error);
+
+    // Fetch channel info
+    const channelData = await new Promise((resolve, reject) => {
+      https.get({
+        hostname: 'www.googleapis.com',
+        path: '/youtube/v3/channels?part=snippet&mine=true',
+        headers: { 'Authorization': 'Bearer ' + tokenData.access_token }
+      }, (res) => {
+        let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(JSON.parse(d)));
+      }).on('error', reject);
+    });
+
+    const channel     = channelData.items?.[0];
+    const channelName = channel?.snippet?.title || 'My Channel';
+    const avatar      = channel?.snippet?.thumbnails?.default?.url || '';
+
+    res.send(`<!DOCTYPE html><html><body><script>
+      window.opener && window.opener.postMessage({
+        type:         'youtube-auth-success',
+        accessToken:  ${JSON.stringify(tokenData.access_token)},
+        refreshToken: ${JSON.stringify(tokenData.refresh_token || '')},
+        channelName:  ${JSON.stringify(channelName)},
+        avatar:       ${JSON.stringify(avatar)}
+      }, '*');
+      window.close();
+    </script></body></html>`);
 
   } catch(err) {
-    console.error('Video error:', err.message);
+    console.error('OAuth error:', err.message);
+    closeWithError(err.message);
+  }
+});
+
+// ─── YouTube Upload ───────────────────────────────────────
+app.post('/upload-youtube', upload.single('video'), async (req, res) => {
+  try {
+    const { accessToken, title, description, category } = req.body;
+    if (!req.file)    return res.status(400).json({ error: 'Missing video file' });
+    if (!accessToken) return res.status(401).json({ error: 'Not authenticated — connect YouTube in Settings' });
+
+    console.log(`YouTube upload — "${title}", ${req.file.size} bytes`);
+
+    const metadata = {
+      snippet: { title, description, categoryId: category || '27', tags: ['swing trading','stock market education','technical analysis'] },
+      status:  { privacyStatus: 'public', selfDeclaredMadeForKids: false }
+    };
+
+    const boundary = '---DJRBoundary9265358979';
+    const CRLF = '\r\n';
+    const metaPart = Buffer.from(
+      `--${boundary}${CRLF}Content-Type: application/json; charset=UTF-8${CRLF}${CRLF}` +
+      JSON.stringify(metadata) + `${CRLF}--${boundary}${CRLF}Content-Type: video/mp4${CRLF}${CRLF}`
+    );
+    const body = Buffer.concat([metaPart, req.file.buffer, Buffer.from(`${CRLF}--${boundary}--`)]);
+
+    const result = await new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'www.googleapis.com',
+        path: '/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status',
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + accessToken,
+          'Content-Type': `multipart/related; boundary="${boundary}"`,
+          'Content-Length': body.length
+        }
+      }, (res) => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString();
+          try { resolve({ status: res.statusCode, body: JSON.parse(text) }); }
+          catch(e) { resolve({ status: res.statusCode, body: { raw: text } }); }
+        });
+      });
+      r.on('error', reject); r.write(body); r.end();
+    });
+
+    if (result.status === 401) return res.status(401).json({ error: 'Token expired — reconnect YouTube in Settings' });
+    if (result.status >= 400) {
+      const msg = result.body?.error?.message || result.body?.raw || 'Upload failed';
+      return res.status(result.status).json({ error: msg });
+    }
+
+    console.log('Upload success — id:', result.body.id);
+    res.json({ success: true, videoId: result.body.id, url: `https://youtu.be/${result.body.id}` });
+
+  } catch(err) {
+    console.error('Upload error:', err.message);
     res.status(500).json({ error: err.message });
-  } finally {
-    [imagePath, audioPath, outputPath].forEach(f => { try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch(e) {} });
   }
 });
 
 app.listen(PORT, () => console.log(`Video server running on port ${PORT}`));
-
-
-// YouTube upload proxy — browser can't call Google directly due to coi-serviceworker CORS
-// Server calls Google on behalf of the browser
-const https = require('https');
-
-app.post('/upload-youtube', upload.single('video'), async (req, res) => {
-  try {
-    const { apiKey, title, description, category } = req.body;
-    if (!req.file) return res.status(400).json({ error: 'Missing video file' });
-    if (!apiKey)   return res.status(400).json({ error: 'Missing API key' });
-
-    console.log(`YouTube upload — title: "${title}", size: ${req.file.size}`);
-
-    const metadata = {
-      snippet: {
-        title,
-        description,
-        categoryId: category || '27',
-        tags: ['swing trading', 'stock market education', 'technical analysis', 'educational']
-      },
-      status: { privacyStatus: 'public', selfDeclaredMadeForKids: false }
-    };
-
-    const boundary = '-------DJRideasBoundary314159';
-    const CRLF = '\r\n';
-    const metaStr = JSON.stringify(metadata);
-    const metaPart = Buffer.from(
-      `--${boundary}${CRLF}Content-Type: application/json; charset=UTF-8${CRLF}${CRLF}${metaStr}${CRLF}` +
-      `--${boundary}${CRLF}Content-Type: video/mp4${CRLF}${CRLF}`
-    );
-    const closePart = Buffer.from(`${CRLF}--${boundary}--`);
-    const body = Buffer.concat([metaPart, req.file.buffer, closePart]);
-
-    const options = {
-      hostname: 'www.googleapis.com',
-      path: `/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status&key=${apiKey}`,
-      method: 'POST',
-      headers: {
-        'Content-Type': `multipart/related; boundary="${boundary}"`,
-        'Content-Length': body.length
-      }
-    };
-
-    const result = await new Promise((resolve, reject) => {
-      const req2 = https.request(options, (r) => {
-        const chunks = [];
-        r.on('data', c => chunks.push(c));
-        r.on('end', () => {
-          const text = Buffer.concat(chunks).toString();
-          try { resolve({ status: r.statusCode, body: JSON.parse(text) }); }
-          catch(e) { resolve({ status: r.statusCode, body: { raw: text } }); }
-        });
-      });
-      req2.on('error', reject);
-      req2.write(body);
-      req2.end();
-    });
-
-    if (result.status >= 400) {
-      const msg = result.body?.error?.message || result.body?.raw || 'YouTube upload failed';
-      console.error('YouTube error:', msg);
-      return res.status(result.status).json({ error: msg });
-    }
-
-    console.log('YouTube upload success — id:', result.body.id);
-    res.json({ success: true, videoId: result.body.id, url: `https://youtu.be/${result.body.id}` });
-
-  } catch(err) {
-    console.error('Upload proxy error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
