@@ -1228,6 +1228,8 @@ async function generateAudioBlob(text) {
   return await res.blob();
 }
 
+function makePnlCurve() {
+  const pts = [];
   let v = 0;
   for (let i = 0; i < 50; i++) {
     v += 0.7 + Math.sin(i * 2.3 + 1.1) * 0.9 + Math.sin(i * 0.7) * 0.5;
