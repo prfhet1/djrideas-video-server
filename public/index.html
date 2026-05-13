@@ -636,54 +636,57 @@ function connectYoutube() {
     `width=${w},height=${h},left=${left},top=${top}`
   );
 
-  window._oauthListener = (e) => {
+  function handleToken(accessToken, refreshToken, channelName, avatar) {
+    localStorage.setItem('key_yt-access-token',  accessToken);
+    localStorage.setItem('key_yt-refresh-token', refreshToken || '');
+    localStorage.setItem('key_yt-channel-name',  channelName  || '');
+    localStorage.setItem('key_yt-avatar',        avatar       || '');
+    updateYouTubeUI();
+    updateDots();
+    notify('YouTube connected ✓', 'success');
+    if (popup && !popup.closed) popup.close();
+    console.log('YT token saved:', localStorage.getItem('key_yt-access-token')?.substring(0,20));
+  }
+
+  // Method 1: direct localStorage write from popup via window.opener (same origin)
+  window.addEventListener('yt-token-saved', () => {
+    updateYouTubeUI();
+    updateDots();
+    notify('YouTube connected ✓', 'success');
+    if (popup && !popup.closed) popup.close();
+  }, { once: true });
+
+  // Method 2: postMessage
+  const msgListener = (e) => {
     if (e.data?.type === 'youtube-auth-success') {
-      window.removeEventListener('message', window._oauthListener);
-      saveKey('yt-access-token',  e.data.accessToken);
-      saveKey('yt-refresh-token', e.data.refreshToken);
-      saveKey('yt-channel-name',  e.data.channelName);
-      saveKey('yt-avatar',        e.data.avatar);
-      updateYouTubeUI();
-      updateDots();
-      notify('YouTube connected ✓', 'success');
-      if (popup && !popup.closed) popup.close();
+      window.removeEventListener('message', msgListener);
+      clearInterval(pollInterval);
+      handleToken(e.data.accessToken, e.data.refreshToken, e.data.channelName, e.data.avatar);
     } else if (e.data?.type === 'youtube-auth-error') {
-      window.removeEventListener('message', window._oauthListener);
+      window.removeEventListener('message', msgListener);
+      clearInterval(pollInterval);
       notify('YouTube auth error: ' + e.data.error, 'error');
     }
   };
-  window.removeEventListener('message', window._oauthListener);
-  window.addEventListener('message', window._oauthListener);
+  window.addEventListener('message', msgListener);
 
-  // Polling fallback — checks server every 2s in case postMessage blocked
+  // Method 3: server poll every 2s
   const pollInterval = setInterval(async () => {
-    if (!popup || popup.closed) {
-      clearInterval(pollInterval);
-      return;
-    }
+    if (!popup || popup.closed) { clearInterval(pollInterval); return; }
     try {
       const r = await fetch(SERVER + '/oauth/token-ready', { cache: 'no-store' });
       if (r.ok) {
         const data = await r.json();
         if (data.accessToken) {
           clearInterval(pollInterval);
-          window.removeEventListener('message', window._oauthListener);
-          // Save directly to localStorage
-          localStorage.setItem('key_yt-access-token',  data.accessToken);
-          localStorage.setItem('key_yt-refresh-token', data.refreshToken || '');
-          localStorage.setItem('key_yt-channel-name',  data.channelName  || '');
-          localStorage.setItem('key_yt-avatar',        data.avatar       || '');
-          updateYouTubeUI();
-          updateDots();
-          notify('YouTube connected ✓', 'success');
-          if (popup && !popup.closed) popup.close();
-          // Verify it saved
-          console.log('Token saved:', localStorage.getItem('key_yt-access-token')?.substring(0,20) + '...');
+          window.removeEventListener('message', msgListener);
+          handleToken(data.accessToken, data.refreshToken, data.channelName, data.avatar);
         }
       }
     } catch(e) { console.log('Poll error:', e.message); }
   }, 2000);
 }
+
 
 function checkYouTubeToken() {
   const token = localStorage.getItem('key_yt-access-token');
