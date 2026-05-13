@@ -1244,7 +1244,97 @@ async function loadFFmpegScript() {
   });
 }
 
-// Draw one frame — max quality chart, intro card + lower third bar only, no zoom
+// Draw one frame — logo in intro + top right, smart lower third labels
+function makePnlCurve() {
+  const pts = [];
+  let v = 0;
+  for (let i = 0; i < 50; i++) {
+    v += 0.7 + Math.sin(i * 2.3 + 1.1) * 0.9 + Math.sin(i * 0.7) * 0.5;
+    pts.push(v);
+  }
+  const mn = Math.min(...pts), mx = Math.max(...pts);
+  return pts.map(p => (p - mn) / (mx - mn));
+}
+const PNL_CURVE = makePnlCurve();
+
+function drawLogoOnCanvas(ctx, cx, cy, size) {
+  const S = size / 440;
+  const R = size / 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI*2);
+  ctx.clip();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(cx-R, cy-R, size, size);
+
+  // Subtle gradient tint
+  const grad = ctx.createLinearGradient(cx-R, cy-R, cx-R, cy+R);
+  grad.addColorStop(0, 'rgba(56,189,248,0.05)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(cx-R, cy-R, size, size);
+
+  // D — dark
+  ctx.font = `900 ${Math.round(175*S)}px "Arial Black", Arial Black, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#0f172a';
+  ctx.fillText('D', cx - R + 44*S, cy + 12*S);
+
+  // JR — blue
+  ctx.fillStyle = '#0ea5e9';
+  ctx.fillText('JR', cx - R + 148*S, cy + 12*S);
+
+  // P&L green line
+  const lx0 = cx - R + 38*S, lx1 = cx + R - 38*S;
+  const ly0 = cy + 50*S, ly1 = cy - 58*S;
+  const pts = PNL_CURVE.map((v, i) => [
+    lx0 + (i / (PNL_CURVE.length-1)) * (lx1-lx0),
+    ly0 - v * (ly0-ly1)
+  ]);
+
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], ly0);
+  pts.forEach(([x,y]) => ctx.lineTo(x,y));
+  ctx.lineTo(pts[pts.length-1][0], ly0);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(34,197,94,0.07)';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  pts.forEach(([x,y]) => ctx.lineTo(x,y));
+  ctx.strokeStyle = '#22c55e';
+  ctx.lineWidth = 3*S;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.stroke();
+
+  const [lpx, lpy] = pts[pts.length-1];
+  ctx.beginPath(); ctx.arc(lpx, lpy, 5*S, 0, Math.PI*2);
+  ctx.fillStyle = '#22c55e'; ctx.fill();
+
+  ctx.restore();
+
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, R-2*S, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(148,163,184,0.2)';
+  ctx.lineWidth = 1.5*S; ctx.stroke();
+
+  // Yellow arc
+  ctx.beginPath();
+  ctx.arc(cx, cy, R-6*S, -Math.PI*0.52, -Math.PI*0.06);
+  ctx.strokeStyle = '#f5c842'; ctx.lineWidth = 3.5*S;
+  ctx.lineCap = 'round'; ctx.stroke();
+
+  // Blue arc
+  ctx.beginPath();
+  ctx.arc(cx, cy, R-6*S, Math.PI*0.6, Math.PI*0.98);
+  ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = 3.5*S; ctx.stroke();
+}
+
 function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
@@ -1253,25 +1343,20 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
   ctx.fillStyle = '#0f1117';
   ctx.fillRect(0, 0, W, H);
 
-  // Chart image — max quality, contain fit so nothing is cut
+  // Chart image — max quality, contain fit
   if (chartImg) {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     const imgW = chartImg.naturalWidth || chartImg.width;
     const imgH = chartImg.naturalHeight || chartImg.height;
-    // Use contain (not cover) — scale to fit within frame, no cropping
     const scale = Math.min(W / imgW, H / imgH);
-    const dw = imgW * scale;
-    const dh = imgH * scale;
-    const dx = (W - dw) / 2;
-    const dy = (H - dh) / 2;
-    // Fill black behind image
+    const dw = imgW * scale, dh = imgH * scale;
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
-    ctx.drawImage(chartImg, dx, dy, dw, dh);
+    ctx.drawImage(chartImg, (W-dw)/2, (H-dh)/2, dw, dh);
   }
 
-  // INTRO CARD (first ~3.5 seconds)
+  // INTRO CARD
   const introEnd = 0.09;
   if (progress < introEnd) {
     const fadeIn = Math.min(1, (progress / introEnd) * 4);
@@ -1279,38 +1364,43 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     const accentColor = isBullish ? '#22c55e' : '#ef4444';
     ctx.save();
     ctx.globalAlpha = fadeIn;
-    ctx.fillStyle = 'rgba(0,0,0,0.90)';
+    ctx.fillStyle = 'rgba(0,0,0,0.92)';
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = isBullish ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)';
+    ctx.fillStyle = isBullish ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = accentColor;
     ctx.fillRect(0, 0, 10, H);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 64px sans-serif';
+
+    // Draw logo in intro center
+    const logoSize = Math.round(H * 0.32);
+    drawLogoOnCanvas(ctx, W/2, H/2 - H*0.12, logoSize);
+
+    // DJR TRADING text below logo
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${Math.round(H*0.055)}px "Helvetica Neue", Arial`;
     ctx.textAlign = 'center';
-    ctx.fillText('DJR IDEAS', W/2, H/2 - 40);
-    ctx.font = '28px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.fillText('Educational Swing Trading', W/2, H/2 + 16);
-    const pillW = 240, pillH = 42;
+    ctx.textBaseline = 'top';
+    ctx.fillText('DJR TRADING', W/2, H/2 + H*0.08);
+
+    ctx.font = `300 ${Math.round(H*0.032)}px "Helvetica Neue", Arial`;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText('Educational Swing Trading', W/2, H/2 + H*0.145);
+
+    // Trend pill
+    const pillW = 280, pillH = 46;
     ctx.fillStyle = accentColor;
     ctx.beginPath();
-    ctx.roundRect(W/2 - pillW/2, H/2 + 48, pillW, pillH, 21);
+    ctx.roundRect(W/2 - pillW/2, H/2 + H*0.22, pillW, pillH, 23);
     ctx.fill();
     ctx.fillStyle = '#000';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.fillText(isBullish ? '↑  BULLISH TREND' : '↓  BEARISH TREND', W/2, H/2 + 76);
-    if (analysis && analysis.ticker && analysis.ticker !== 'Update' && analysis.chart_type !== 'manual') {
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.font = '20px sans-serif';
-      const name = analysis.ticker + (analysis.company && analysis.company !== 'Manual entry' ? ' — ' + analysis.company : '');
-      ctx.fillText(name, W/2, H/2 + 118);
-    }
+    ctx.font = `bold ${Math.round(H*0.028)}px "Helvetica Neue", Arial`;
+    ctx.fillText(isBullish ? '↑  BULLISH TREND' : '↓  BEARISH TREND', W/2, H/2 + H*0.22 + 30);
+
     ctx.restore();
     return;
   }
 
-  // OUTRO CARD (last 4 seconds)
+  // OUTRO CARD
   const outroStart = 0.88;
   if (progress > outroStart) {
     const fadeIn = Math.min(1, ((progress - outroStart) / (1 - outroStart)) * 2.5);
@@ -1320,42 +1410,65 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#3b82f6';
     ctx.fillRect(0, 0, 10, H);
+
+    const logoSize = Math.round(H * 0.28);
+    drawLogoOnCanvas(ctx, W/2, H/2 - H*0.1, logoSize);
+
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 56px sans-serif';
+    ctx.font = `700 ${Math.round(H*0.05)}px "Helvetica Neue", Arial`;
     ctx.textAlign = 'center';
-    ctx.fillText('DJR IDEAS', W/2, H/2 - 30);
-    ctx.font = '24px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.fillText('Like & Subscribe for more trade ideas', W/2, H/2 + 20);
-    ctx.font = '15px sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.fillText('Educational content only — not financial advice', W/2, H/2 + 58);
+    ctx.textBaseline = 'top';
+    ctx.fillText('DJR TRADING', W/2, H/2 + H*0.07);
+    ctx.font = `400 ${Math.round(H*0.03)}px "Helvetica Neue", Arial`;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillText('Like & Subscribe for more trade ideas', W/2, H/2 + H*0.135);
+    ctx.font = `300 ${Math.round(H*0.022)}px "Helvetica Neue", Arial`;
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillText('Educational content only — not financial advice', W/2, H/2 + H*0.19);
     ctx.restore();
     return;
   }
 
-  // LOWER THIRD BAR — slides up after intro, shows all levels from script
+  // TOP RIGHT — small logo watermark
+  const logoWMSize = Math.round(H * 0.1);
+  const logoWMX = W - logoWMSize/2 - 20;
+  const logoWMY = logoWMSize/2 + 20;
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  drawLogoOnCanvas(ctx, logoWMX, logoWMY, logoWMSize);
+  ctx.restore();
+
+  // Top right watermark text
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = '#fff';
+  ctx.font = `300 ${Math.round(H*0.018)}px "Helvetica Neue", Arial`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillText('djrideas.onrender.com', W - logoWMSize - 30, 18);
+  ctx.restore();
+
+  // LOWER THIRD BAR
   const mainProgress = (progress - introEnd) / (outroStart - introEnd);
   const ltProgress = Math.min(1, mainProgress / 0.15);
 
   if (ltProgress > 0) {
     const isBullish = !analysis || analysis.trend !== 'bearish';
     const accentColor = isBullish ? '#22c55e' : '#ef4444';
-    const sectorLabel = currentSector === 'idea' ? 'SETUP IDEA' : currentSector === 'open' ? 'TRADE OPEN' : 'TRADE CLOSE';
-    const sectorColor = currentSector === 'idea' ? '#3b82f6' : currentSector === 'open' ? '#22c55e' : '#ef4444';
+    const sectorLabel = currentSector === 'idea' ? 'SETUP IDEA' :
+                        currentSector === 'open' ? 'TRADE OPEN' : 'TRADE CLOSE';
+    const sectorColor = currentSector === 'idea' ? '#3b82f6' :
+                        currentSector === 'open' ? '#22c55e' : '#ef4444';
+    const isIdea = currentSector === 'idea';
 
+    // Build levels — label differently for idea vs trade
     const levels = [];
     if (analysis) {
-      if (analysis.entry && !isNaN(parseFloat(analysis.entry)))    
-        levels.push({ label: 'Entry',  value: `$${parseFloat(analysis.entry).toFixed(2)}`,  color: '#3b82f6' });
-      if (analysis.stop && !isNaN(parseFloat(analysis.stop)))     
-        levels.push({ label: 'Stop',   value: `$${parseFloat(analysis.stop).toFixed(2)}`,   color: '#ef4444' });
-      if (analysis.target && !isNaN(parseFloat(analysis.target)))   
-        levels.push({ label: 'Target', value: `$${parseFloat(analysis.target).toFixed(2)}`, color: '#22c55e' });
-      if (analysis.rr_ratio && !isNaN(parseFloat(analysis.rr_ratio))) 
-        levels.push({ label: 'R:R',    value: `${parseFloat(analysis.rr_ratio).toFixed(1)}:1`, color: '#f59e0b' });
-      if (analysis.move_pct && !isNaN(parseFloat(analysis.move_pct))) 
-        levels.push({ label: 'Move',   value: `${parseFloat(analysis.move_pct).toFixed(1)}%`, color: '#a855f7' });
+      if (analysis.entry)    levels.push({ label: isIdea ? 'Est. Entry' : 'Entry',  value: `$${parseFloat(analysis.entry).toFixed(2)}`,  color: '#3b82f6' });
+      if (analysis.stop)     levels.push({ label: isIdea ? 'Est. Stop'  : 'Stop',   value: `$${parseFloat(analysis.stop).toFixed(2)}`,   color: '#ef4444' });
+      if (analysis.target)   levels.push({ label: isIdea ? 'Est. Target': 'Target', value: `$${parseFloat(analysis.target).toFixed(2)}`, color: '#22c55e' });
+      if (analysis.rr_ratio && !isIdea) levels.push({ label: 'R:R', value: `${parseFloat(analysis.rr_ratio).toFixed(1)}:1`, color: '#f59e0b' });
+      if (analysis.move_pct && !isIdea) levels.push({ label: 'Move', value: `${parseFloat(analysis.move_pct).toFixed(1)}%`, color: '#a855f7' });
     }
 
     const barH = 68;
@@ -1372,58 +1485,53 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     const company = (analysis && analysis.company !== 'Manual entry' ? analysis.company : '') || '';
     const fullName = ticker + (company && company !== ticker ? ' — ' + company : '');
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 20px sans-serif';
+    ctx.font = `bold ${Math.round(H*0.028)}px "Helvetica Neue", Arial`;
     ctx.textAlign = 'left';
-    ctx.fillText(fullName || 'DJR Trading — Swing Idea', 22, barY + 26);
+    ctx.textBaseline = 'top';
+    ctx.fillText(fullName || 'DJR Trading — Swing Idea', 22, barY + 10);
     ctx.fillStyle = sectorColor;
-    ctx.font = 'bold 11px sans-serif';
+    ctx.font = `bold ${Math.round(H*0.016)}px "Helvetica Neue", Arial`;
     ctx.fillText(sectorLabel, 22, barY + 44);
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
-    ctx.font = '11px sans-serif';
-    ctx.fillText('Educational — not financial advice', 22, barY + 60);
 
-    // Right: colored level pills
+    // Disclaimer bottom left
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.font = `${Math.round(H*0.014)}px "Helvetica Neue", Arial`;
+    ctx.fillText('Educational — not financial advice', 22, barY + 56);
+
+    // Right: colored pills
     if (levels.length > 0) {
-      const pillH = 24;
+      const pillH = 26;
       const pillPad = 10;
       const pillGap = 6;
-      let rx = W - 16;
-      ctx.font = 'bold 12px sans-serif';
+      let rx = W - 20;
+      ctx.font = `bold ${Math.round(H*0.016)}px "Helvetica Neue", Arial`;
       [...levels].reverse().forEach(({ label, value, color }) => {
         const text = `${label}: ${value}`;
         const tw = ctx.measureText(text).width;
         const pillW = tw + pillPad * 2;
         rx -= pillW;
-        // Background
+
         ctx.globalAlpha = 0.18;
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.roundRect(rx, barY + (barH - pillH) / 2, pillW, pillH, 5);
         ctx.fill();
-        // Border
+
         ctx.globalAlpha = 0.7;
         ctx.strokeStyle = color;
         ctx.lineWidth = 1;
         ctx.stroke();
-        // Text
+
         ctx.globalAlpha = 1;
         ctx.fillStyle = color;
         ctx.textAlign = 'left';
-        ctx.fillText(text, rx + pillPad, barY + (barH + pillH) / 2 - 5);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, rx + pillPad, barY + barH/2);
         rx -= pillGap;
       });
     }
     ctx.restore();
   }
-
-  // Top watermark
-  ctx.save();
-  ctx.globalAlpha = 0.28;
-  ctx.fillStyle = '#fff';
-  ctx.font = '12px sans-serif';
-  ctx.textAlign = 'right';
-  ctx.fillText('Educational — not financial advice', W - 12, 22);
-  ctx.restore();
 }
 
 
