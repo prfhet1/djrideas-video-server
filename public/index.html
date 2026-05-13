@@ -465,6 +465,7 @@
             </select>
           </div>
           <button class="btn btn-ghost btn-sm" onclick="disconnectYoutube()">Disconnect YouTube</button>
+          <button class="btn btn-ghost btn-sm" onclick="checkYouTubeToken()" style="margin-left:8px;">🔍 Verify token</button>
         </div>
         <div id="yt-disconnected-view">
           <p style="font-size:13px; color:var(--text2); margin-bottom:12px;">Enter your Google OAuth credentials then connect your channel.</p>
@@ -635,7 +636,6 @@ function connectYoutube() {
     `width=${w},height=${h},left=${left},top=${top}`
   );
 
-  window._oauthListener = null; // clear old
   window._oauthListener = (e) => {
     if (e.data?.type === 'youtube-auth-success') {
       window.removeEventListener('message', window._oauthListener);
@@ -655,31 +655,43 @@ function connectYoutube() {
   window.removeEventListener('message', window._oauthListener);
   window.addEventListener('message', window._oauthListener);
 
-  // Also poll the server for token in case postMessage is blocked by service worker
+  // Polling fallback — checks server every 2s in case postMessage blocked
   const pollInterval = setInterval(async () => {
     if (!popup || popup.closed) {
       clearInterval(pollInterval);
       return;
     }
     try {
-      const r = await fetch(SERVER + '/oauth/token-ready');
+      const r = await fetch(SERVER + '/oauth/token-ready', { cache: 'no-store' });
       if (r.ok) {
         const data = await r.json();
         if (data.accessToken) {
           clearInterval(pollInterval);
           window.removeEventListener('message', window._oauthListener);
-          saveKey('yt-access-token',  data.accessToken);
-          saveKey('yt-refresh-token', data.refreshToken || '');
-          saveKey('yt-channel-name',  data.channelName || '');
-          saveKey('yt-avatar',        data.avatar || '');
+          // Save directly to localStorage
+          localStorage.setItem('key_yt-access-token',  data.accessToken);
+          localStorage.setItem('key_yt-refresh-token', data.refreshToken || '');
+          localStorage.setItem('key_yt-channel-name',  data.channelName  || '');
+          localStorage.setItem('key_yt-avatar',        data.avatar       || '');
           updateYouTubeUI();
           updateDots();
           notify('YouTube connected ✓', 'success');
           if (popup && !popup.closed) popup.close();
+          // Verify it saved
+          console.log('Token saved:', localStorage.getItem('key_yt-access-token')?.substring(0,20) + '...');
         }
       }
-    } catch(e) {}
+    } catch(e) { console.log('Poll error:', e.message); }
   }, 2000);
+}
+
+function checkYouTubeToken() {
+  const token = localStorage.getItem('key_yt-access-token');
+  if (token) {
+    notify('Token found ✓ — ' + token.substring(0, 20) + '...', 'success');
+  } else {
+    notify('No token in localStorage — please reconnect', 'error');
+  }
 }
 
 function disconnectYoutube() {
