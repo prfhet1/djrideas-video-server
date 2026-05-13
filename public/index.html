@@ -1375,26 +1375,25 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     const logoSize = Math.round(H * 0.32);
     drawLogoOnCanvas(ctx, W/2, H/2 - H*0.12, logoSize);
 
-    // DJR TRADING text below logo
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `700 ${Math.round(H*0.055)}px "Helvetica Neue", Arial`;
+    // Swing Trading tagline only (no DJR text — logo already has it)
+    ctx.font = `300 ${Math.round(H*0.028)}px "Helvetica Neue", Arial`;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText('DJR TRADING', W/2, H/2 + H*0.08);
+    ctx.fillText('Swing Trading  ·  Ideas  ·  Analysis', W/2, H/2 + H*0.1);
 
-    ctx.font = `300 ${Math.round(H*0.032)}px "Helvetica Neue", Arial`;
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText('Educational Swing Trading', W/2, H/2 + H*0.145);
-
-    // Trend pill
-    const pillW = 280, pillH = 46;
+    // Trend pill — text properly centered
+    const pillW = 300, pillH = 52;
+    const pillX = W/2 - pillW/2;
+    const pillY = H/2 + H*0.185;
     ctx.fillStyle = accentColor;
     ctx.beginPath();
-    ctx.roundRect(W/2 - pillW/2, H/2 + H*0.22, pillW, pillH, 23);
+    ctx.roundRect(pillX, pillY, pillW, pillH, 26);
     ctx.fill();
     ctx.fillStyle = '#000';
-    ctx.font = `bold ${Math.round(H*0.028)}px "Helvetica Neue", Arial`;
-    ctx.fillText(isBullish ? '↑  BULLISH TREND' : '↓  BEARISH TREND', W/2, H/2 + H*0.22 + 30);
+    ctx.font = `bold ${Math.round(H*0.026)}px "Helvetica Neue", Arial`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(isBullish ? '↑  BULLISH TREND' : '↓  BEARISH TREND', W/2, pillY + pillH/2);
 
     ctx.restore();
     return;
