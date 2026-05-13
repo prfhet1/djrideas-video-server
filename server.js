@@ -212,6 +212,48 @@ app.get('/oauth/callback', async (req, res) => {
   }
 });
 
+// ─── Thumbnail upload ─────────────────────────────────────
+app.post('/upload-thumbnail', upload.single('thumbnail'), async (req, res) => {
+  try {
+    const { accessToken, videoId } = req.body;
+    if (!req.file || !accessToken || !videoId) return res.status(400).json({ error: 'Missing params' });
+    console.log(`Thumbnail upload — videoId: ${videoId}, size: ${req.file.size}`);
+
+    const result = await new Promise((resolve, reject) => {
+      const r = https.request({
+        hostname: 'www.googleapis.com',
+        path: `/upload/youtube/v3/thumbnails/set?videoId=${videoId}&uploadType=media`,
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + accessToken,
+          'Content-Type': 'image/jpeg',
+          'Content-Length': req.file.size
+        }
+      }, (res) => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString();
+          try { resolve({ status: res.statusCode, body: JSON.parse(text) }); }
+          catch(e) { resolve({ status: res.statusCode, body: { raw: text } }); }
+        });
+      });
+      r.on('error', reject); r.write(req.file.buffer); r.end();
+    });
+
+    if (result.status >= 400) {
+      const msg = result.body?.error?.message || result.body?.raw || 'Thumbnail failed';
+      console.error('Thumbnail error:', msg);
+      return res.status(result.status).json({ error: msg });
+    }
+    console.log('Thumbnail set ✓');
+    res.json({ success: true });
+  } catch(err) {
+    console.error('Thumbnail error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── YouTube Upload ───────────────────────────────────────
 app.post('/upload-youtube', upload.single('video'), async (req, res) => {
   try {
