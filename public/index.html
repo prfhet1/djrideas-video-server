@@ -857,6 +857,7 @@ ${persona.toneRules}
 
 CHART READING RULES — follow these precisely regardless of persona:
 - ALWAYS focus ONLY on the RIGHT panel — this is the daily timeframe chart.
+- CRITICAL: The bottom-left weekly panel exists in the image but must be COMPLETELY IGNORED. Do not read any signals, E markers, price levels, or any data from it. Every single observation must come exclusively from the RIGHT daily panel and the LEFT dashboard.
 - Background color: GREEN = long-term trend bullish. RED = long-term trend bearish.
 - Shaded zone (cloud): Green cloud = short-term bullish. Red cloud = short-term bearish / correction on green background.
 - LAST SIGNAL ONLY — ignore all previous signals, only read the most recent one before current price:
@@ -865,12 +866,14 @@ CHART READING RULES — follow these precisely regardless of persona:
   * Orange dot = EXIT / new correction started
   * Pink/red triangle = bearish setup
 - Volatility: red dashed ATR line ABOVE the cloud = overextended, wait. INSIDE or below = ok.
-- Dashboard left panel: use ONLY the "D EMA 9 > 20" or "D Trend" row. Left number = expected close level. Right number = stop loss level.
+- Dashboard left panel: use ONLY the "D Trend" row. Left number = close level (entry trigger). Right number = stop loss level. The stop loss is ALWAYS below the close level — always present it as "stop below at [X]". Never place the stop above the entry.
 - OLD HIGH = purple horizontal line. Calculate % from entry level to old high. Under 2% = warn to monitor closely or wait. 2%+ = mention as natural target area.
-- EARNINGS (E) / DIVIDEND (D) markers on time axis RIGHT panel:
-  * 1-3 candles ahead = urgent, avoid or close before event
-  * Few weeks ahead = mention casually, plan to close before
-  * Far out = do not mention
+- EARNINGS (E) markers — RIGHT daily panel x-axis ONLY:
+  * Count candles from current price to the next E marker on the DAILY RIGHT panel only.
+  * 1-3 candles ahead = urgent, mention to avoid or close before event
+  * 4-15 candles ahead = mention casually, plan to close before
+  * 15+ candles ahead = DO NOT mention earnings at all. Silence is better than a wrong call.
+  * If you are not certain an E marker exists ahead on the daily = DO NOT mention earnings.
 - NEVER say "that's the trigger" — say "if after the close we meet all strategy criteria above [level]..."
 - NEVER mention the score
 - NEVER say "dot", "triangle", "cloud", "ATR", "EMA", "signal", "indicator"
@@ -892,7 +895,7 @@ SECTOR: IDEA — setup chart, no risk/reward tool visible.
   "event_urgency": "none" or "soon" or "urgent",
   "close_reason": null,
   "telegram": "2-3 sentences MAX. Write in the ${currentPersona} persona voice. Tease the setup with a hook that fits your style. Direct to YouTube. NO levels, NO details.",
-  "youtube": "8-12 sentences. Write entirely in the ${currentPersona} persona voice and style. Analyze this chart through your persona lens. Include close level and stop level naturally. Address the old high. Mention events if relevant. End with disclaimer in your voice."
+  "youtube": "8-12 sentences. Write entirely in the ${currentPersona} persona voice and style. Analyze this chart through your persona lens. Include the close level (left D Trend number) and stop level (right D Trend number) naturally — the stop is ALWAYS presented as sitting below the close level, never above. Address the old high. Only mention earnings if a clear E marker is 1-15 candles ahead on the daily. End with disclaimer in your voice."
 }`;
 
   const openPrompt = base + `
@@ -1214,7 +1217,11 @@ async function generateAudioBlob(text) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error('TTS error: ' + (err.error || res.status));
+    const msg = err.error || res.status;
+    if (msg.includes('No audio') || msg.includes('failed after')) {
+      throw new Error('Voice server couldn\'t reach Microsoft TTS — please try again in a few seconds.');
+    }
+    throw new Error('TTS error: ' + msg);
   }
 
   return await res.blob();
