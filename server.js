@@ -194,47 +194,17 @@ app.get('/oauth/callback', async (req, res) => {
     const channelName = channel?.snippet?.title || 'My Channel';
     const avatar      = channel?.snippet?.thumbnails?.default?.url || '';
 
-    // Store for polling fallback
-    const tokenPayload = {
-      accessToken:  tokenData.access_token,
-      refreshToken: tokenData.refresh_token || '',
-      channelName,
-      avatar
-    };
-    pendingTokens.set('latest', tokenPayload);
+    // Store for any fallback
+    pendingTokens.set('latest', { accessToken: tokenData.access_token, refreshToken: tokenData.refresh_token || '', channelName, avatar });
     setTimeout(() => pendingTokens.delete('latest'), 120000);
 
-    // Redirect app to itself with token in hash — bypasses coi-serviceworker postMessage blocking
-    const params = new URLSearchParams({
-      yt_access_token:  tokenData.access_token,
-      yt_refresh_token: tokenData.refresh_token || '',
-      yt_channel_name:  channelName,
-      yt_avatar:        avatar
-    });
-
-    res.send(`<!DOCTYPE html><html><body><script>
-      // Try postMessage first
-      try {
-        window.opener && window.opener.postMessage({
-          type:         'youtube-auth-success',
-          accessToken:  ${JSON.stringify(tokenData.access_token)},
-          refreshToken: ${JSON.stringify(tokenData.refresh_token || '')},
-          channelName:  ${JSON.stringify(channelName)},
-          avatar:       ${JSON.stringify(avatar)}
-        }, '*');
-      } catch(e) {}
-      // Also write directly to opener localStorage as fallback
-      try {
-        window.opener.localStorage.setItem('key_yt-access-token',  ${JSON.stringify(tokenData.access_token)});
-        window.opener.localStorage.setItem('key_yt-refresh-token', ${JSON.stringify(tokenData.refresh_token || '')});
-        window.opener.localStorage.setItem('key_yt-channel-name',  ${JSON.stringify(channelName)});
-        window.opener.localStorage.setItem('key_yt-avatar',        ${JSON.stringify(avatar)});
-        window.opener.dispatchEvent(new Event('yt-token-saved'));
-      } catch(e) {}
-      setTimeout(() => window.close(), 800);
-    </script>
-    <p style="font-family:sans-serif;text-align:center;margin-top:60px;font-size:18px;color:#22c55e;">✓ YouTube connected! Closing...</p>
-    </body></html>`);
+    // Redirect back to app with token in URL params — most reliable, no postMessage/CORS issues
+    const appUrl = new URL('https://djrideas-video-server.onrender.com');
+    appUrl.searchParams.set('yt_access_token',  tokenData.access_token);
+    appUrl.searchParams.set('yt_refresh_token', tokenData.refresh_token || '');
+    appUrl.searchParams.set('yt_channel_name',  channelName);
+    appUrl.searchParams.set('yt_avatar',        avatar);
+    res.redirect(appUrl.toString());
 
   } catch(err) {
     console.error('OAuth error:', err.message);
