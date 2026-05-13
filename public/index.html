@@ -67,6 +67,19 @@
   .sector-tab.active[data-sector="open"] { background: var(--green-bg); border-color: var(--green); color: var(--green); }
   .sector-tab.active[data-sector="close"] { background: var(--red-bg); border-color: var(--red); color: var(--red); }
   
+  /* Persona tabs */
+  .persona-tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; }
+  .persona-tab { flex: 1; padding: 10px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg2); font-size: 12px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.15s; text-align: center; line-height: 1.4; }
+  .persona-tab:hover { border-color: var(--border2); color: var(--text); background: var(--bg3); }
+  .persona-tab.active[data-persona="technical"] { background: #1a1a2e; border-color: #818cf8; color: #818cf8; }
+  .persona-tab.active[data-persona="fundamental"] { background: #1a2a1a; border-color: #4ade80; color: #4ade80; }
+  .persona-tab.active[data-persona="educational"] { background: #2a1a0a; border-color: #fb923c; color: #fb923c; }
+  .persona-desc { padding: 10px 14px; border-radius: var(--radius-sm); font-size: 12px; color: var(--text2); margin-bottom: 1rem; border-left: 3px solid; }
+  .persona-desc.technical { background: #1a1a2e; border-color: #818cf8; }
+  .persona-desc.fundamental { background: #1a2a1a; border-color: #4ade80; }
+  .persona-desc.educational { background: #2a1a0a; border-color: #fb923c; }
+  .persona-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 2px; }
+
   /* Upload zone */
   .upload-zone { border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 2.5rem; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg2); margin-bottom: 1rem; }
   .upload-zone:hover, .upload-zone.drag-over { border-color: var(--blue); background: var(--blue-bg); }
@@ -237,6 +250,29 @@
         <div class="sector-desc idea" id="sector-desc">
           Upload a setup chart — no risk/reward tool visible. AI will identify the developing setup and create a teaser idea.
         </div>
+
+        <!-- Persona selector -->
+        <div style="margin-bottom:1rem;">
+          <div style="font-size:11px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.07em; margin-bottom:8px;">Trader persona — voice &amp; style</div>
+          <div class="persona-tabs">
+            <button class="persona-tab active" data-persona="technical" onclick="setPersona('technical', this)">
+              <div class="persona-label">📐 Technical</div>
+              <div style="font-size:11px; opacity:0.75;">Chart-first · Precise</div>
+            </button>
+            <button class="persona-tab" data-persona="fundamental" onclick="setPersona('fundamental', this)">
+              <div class="persona-label">📰 Fundamental</div>
+              <div style="font-size:11px; opacity:0.75;">Context-driven · Story</div>
+            </button>
+            <button class="persona-tab" data-persona="educational" onclick="setPersona('educational', this)">
+              <div class="persona-label">🎓 Educational</div>
+              <div style="font-size:11px; opacity:0.75;">Teacher mode · Step-by-step</div>
+            </button>
+          </div>
+          <div class="persona-desc technical" id="persona-desc">
+            <strong style="color:#818cf8;">Guy Neural</strong> — Direct, chart-only analysis. Talks price action, structure and levels. Confident tone, no fluff.
+          </div>
+        </div>
+
         <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
           <div class="upload-icon">📤</div>
           <p>Drop or click to upload your chart</p>
@@ -450,9 +486,78 @@
 <script>
 // ─── State ───────────────────────────────────────────────
 let currentSector = 'idea';
+let currentPersona = 'technical';
 let imageBase64 = null;
 let imageMime = 'image/png';
 let currentAnalysis = null;
+
+// ─── Persona ─────────────────────────────────────────────
+const personaConfig = {
+  technical: {
+    label: '📐 Technical',
+    voice: 'en-US-GuyNeural',
+    voiceName: 'Guy Neural',
+    color: '#818cf8',
+    desc: '<strong style="color:#818cf8;">Guy Neural</strong> — Direct, chart-only analysis. Talks price action, structure and levels. Confident tone, no fluff.',
+    descClass: 'technical',
+    toneRules: `PERSONA: TECHNICAL TRADER
+You are a sharp, chart-first technical analyst. Your voice is confident and precise — you speak in terms of price action, structure, and levels. You do NOT talk about company news, earnings stories, or macro sentiment. Your world is the chart. 
+Tone rules:
+- Short punchy sentences. No filler phrases.
+- Say "price" not "the stock". Say "the setup" not "the opportunity".
+- Talk about what price IS doing, not what it "might" do.
+- Use words like: structure, level, zone, momentum, breakout, rejection, confluence, holding, flush, range.
+- Never say "I believe" or "I think" — state what the chart shows.
+- Telegram: 2-3 punchy lines max. Sharp hook. Direct link to YouTube.
+- YouTube: Clinical walkthrough. What the chart shows, entry logic, risk management. No emotional language.`
+  },
+  fundamental: {
+    label: '📰 Fundamental',
+    voice: 'en-US-AriaNeural',
+    voiceName: 'Aria Neural',
+    color: '#4ade80',
+    desc: '<strong style="color:#4ade80;">Aria Neural</strong> — Context-driven storytelling. Connects price to what\'s happening in the company and market. Big picture thinking.',
+    descClass: 'fundamental',
+    toneRules: `PERSONA: FUNDAMENTAL TRADER
+You are a fundamental-leaning swing trader who always connects price action to the bigger story. You reference what is happening in the market, sector, or macro environment to explain WHY this setup is interesting. You sound like someone who reads the news AND watches the chart.
+Tone rules:
+- Conversational and story-driven. Paint a picture.
+- Connect the setup to context: earnings cycle, sector rotation, rate environment, institutional interest.
+- Use words like: accumulation, story, narrative, catalyst, sector tailwinds, institutional positioning, value zone, market structure.
+- It is ok to mention the company name and what they do briefly.
+- Don't be overly technical — explain what you see in terms anyone can follow.
+- Telegram: 2-3 lines with a compelling narrative hook. Make people curious about the story.
+- YouTube: Start with WHY this stock is interesting right now. Then show the chart setup. End with the risk framework.`
+  },
+  educational: {
+    label: '🎓 Educational',
+    voice: 'en-US-DavisNeural',
+    voiceName: 'Davis Neural',
+    color: '#fb923c',
+    desc: '<strong style="color:#fb923c;">Davis Neural</strong> — Patient teacher mode. Explains every element step by step so beginners and intermediates learn the strategy.',
+    descClass: 'educational',
+    toneRules: `PERSONA: EDUCATIONAL TRADER
+You are a patient, warm trading teacher whose primary goal is to help viewers understand HOW to read a chart and WHY setups work. Every analysis is a lesson. You walk through each element as if teaching someone for the first time.
+Tone rules:
+- Use "let me show you", "notice how", "here is what I look for", "this is why this matters".
+- Break down each element of the chart: the long-term trend, the short-term phase, the signal, the levels.
+- Explain the WHY behind each observation, not just the what.
+- Use analogies and simple language. Never assume prior knowledge.
+- Warm and encouraging tone — people should feel empowered after watching.
+- Telegram: 2-3 lines that frame it as a learning moment. "Today we have a great example of..."
+- YouTube: Full step-by-step walkthrough. Explain every element. Connect it to the strategy rules. Make it a masterclass.`
+  }
+};
+
+function setPersona(persona, btn) {
+  currentPersona = persona;
+  document.querySelectorAll('.persona-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const cfg = personaConfig[persona];
+  const desc = document.getElementById('persona-desc');
+  desc.innerHTML = cfg.desc;
+  desc.className = 'persona-desc ' + cfg.descClass;
+}
 
 // ─── Storage ─────────────────────────────────────────────
 function getDB() {
@@ -744,9 +849,13 @@ function notify(msg, type = '') {
 
 // ─── Build system prompt ──────────────────────────────────
 function buildPrompt(sector) {
-  const base = `You are an experienced swing trader creating EDUCATIONAL content for your community. Your content teaches trading concepts using real chart examples. It is NOT financial advice. Every output must be framed as education — "here is what I see and why, based on my strategy" — never "buy this" or "this will go up".
+  const persona = personaConfig[currentPersona];
 
-CHART READING RULES:
+  const base = `You are an experienced swing trader creating content for your community. It is NOT financial advice. Every output must be framed as education.
+
+${persona.toneRules}
+
+CHART READING RULES — follow these precisely regardless of persona:
 - ALWAYS focus ONLY on the RIGHT panel — this is the daily timeframe chart.
 - Background color: GREEN = long-term trend bullish. RED = long-term trend bearish.
 - Shaded zone (cloud): Green cloud = short-term bullish. Red cloud = short-term bearish / correction on green background.
@@ -766,9 +875,8 @@ CHART READING RULES:
 - NEVER mention the score
 - NEVER say "dot", "triangle", "cloud", "ATR", "EMA", "signal", "indicator"
 - Always refer to purple line as "the old high"
-- Sound like a warm, confident trader teaching his community — not giving advice
 
-DISCLAIMER to include naturally at end of every script:
+DISCLAIMER to include naturally at end of every script (wording may vary by persona but meaning must be kept):
 "This is purely for educational purposes — it is not financial advice. Always do your own research and never trade based solely on what you see here."
 
 OUTPUT: Valid JSON only, no markdown:`;
@@ -783,8 +891,8 @@ SECTOR: IDEA — setup chart, no risk/reward tool visible.
   "old_high_pct": number,
   "event_urgency": "none" or "soon" or "urgent",
   "close_reason": null,
-  "telegram": "2-3 sentences MAX. Tease the setup — just enough to make followers curious. Name, trend direction, one hook line. Direct to YouTube. NO levels, NO details.",
-  "youtube": "8-12 sentences. Teach the viewer what you see on this chart and why it's interesting based on your strategy. Explain the long-term trend, what the short-term is doing, what you are watching for and why. Include the close level and stop level naturally. Address the old high distance and what it means. Mention events if relevant. End with the educational disclaimer naturally woven in."
+  "telegram": "2-3 sentences MAX. Write in the ${currentPersona} persona voice. Tease the setup with a hook that fits your style. Direct to YouTube. NO levels, NO details.",
+  "youtube": "8-12 sentences. Write entirely in the ${currentPersona} persona voice and style. Analyze this chart through your persona lens. Include close level and stop level naturally. Address the old high. Mention events if relevant. End with disclaimer in your voice."
 }`;
 
   const openPrompt = base + `
@@ -802,8 +910,8 @@ SECTOR: TRADE OPEN — risk/reward tool box is visible on chart with entry/stop/
   "old_high_pct": number,
   "event_urgency": "none" or "soon" or "urgent",
   "close_reason": null,
-  "telegram": "2-3 sentences. Say the trade is now active. Use exact entry level. Direct to YouTube for full educational breakdown. NO other details.",
-  "youtube": "10-14 sentences teaching moment. Start by saying after a daily close at [entry] met all strategy criteria. Explain WHY this setup made sense educationally — trend context, what the correction/pullback looked like, why the entry zone was significant. Give exact stop and target and explain the risk management logic educationally. Address the old high if relevant. Mention events if relevant. End with educational disclaimer."
+  "telegram": "2-3 sentences in ${currentPersona} voice. Trade is now active. Use exact entry level. Direct to YouTube.",
+  "youtube": "10-14 sentences in ${currentPersona} persona voice. Confirm the trade opened. Explain the setup through your persona lens. Give exact stop and target with your persona's risk logic. Address old high if relevant. End with disclaimer in your voice."
 }`;
 
   const closePrompt = base + `
@@ -823,8 +931,8 @@ SECTOR: TRADE CLOSE — detect the closing reason from the chart:
   "close_reason_label": human readable label e.g. "Stop loss hit" or "Early close — new correction signal",
   "event_urgency": "none" or "soon" or "urgent",
   "old_high_pct": 0,
-  "telegram": "2-3 sentences. Say the trade on [ticker] has been closed. State the reason simply. Direct to YouTube for the full educational breakdown.",
-  "youtube": "12-16 sentences full teaching moment. Explain what happened on this chart, why the trade was closed, and what this teaches us about the strategy and risk management. If stop loss — teach about why we respect stops. If early close — teach about reading the chart for warning signs. If target reached — celebrate and teach about taking profits. If gap fill — teach about gap behaviour and why we made this decision. If new correction — teach about recognizing when momentum shifts. Make it educational and empowering for the viewer. End with educational disclaimer."
+  "telegram": "2-3 sentences in ${currentPersona} voice. Trade closed. State reason. Direct to YouTube.",
+  "youtube": "12-16 sentences entirely in ${currentPersona} persona voice. Explain what happened and what it teaches us. Frame the lesson through your persona — technical persona focuses on structure and levels; fundamental persona connects to the bigger picture; educational persona walks through each warning sign step by step. End with disclaimer in your voice."
 }`;
 
   if (sector === 'idea') return ideaPrompt;
@@ -842,7 +950,7 @@ async function analyzeChart() {
   document.getElementById('loading').classList.add('visible');
   document.getElementById('results').classList.remove('visible');
   document.getElementById('error-msg').classList.remove('visible');
-  document.getElementById('loading-text').textContent = 'Reading your chart...';
+  document.getElementById('loading-text').textContent = `Analyzing as ${personaConfig[currentPersona].label}...`;
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -900,12 +1008,15 @@ function renderResults(p) {
   const sectorLabel = currentSector === 'idea' ? '💡 Idea' : currentSector === 'open' ? '🟢 Trade open' : '🔴 Trade close';
   const eventBadge = p.event_urgency === 'urgent' ? '<span class="badge badge-red">⚡ Event imminent</span>' :
                      p.event_urgency === 'soon' ? '<span class="badge badge-amber">📅 Event upcoming</span>' : '';
+  const cfg = personaConfig[currentPersona];
+  const personaBadge = `<span class="badge" style="background:transparent;border-color:${cfg.color};color:${cfg.color};">${cfg.label}</span>`;
 
   document.getElementById('meta-row').innerHTML = `
     ${p.ticker ? `<span class="badge badge-neutral">${p.ticker}</span>` : ''}
     ${p.company ? `<span class="badge badge-neutral">${p.company}</span>` : ''}
     <span class="badge ${trendClass}">${trendLabel}</span>
     <span class="badge badge-neutral">${sectorLabel}</span>
+    ${personaBadge}
     ${p.setup_type ? `<span class="badge badge-neutral">${p.setup_type}</span>` : ''}
     ${eventBadge}
   `;
@@ -991,8 +1102,9 @@ async function generateVideoPreview() {
   const script = currentAnalysis.youtube + ' This content is for educational purposes only and does not constitute financial advice.';
 
   try {
-    // Step 1: Generate audio via Puter.js (Amazon Polly Neural — free)
-    status.textContent = 'Generating voiceover...';
+    // Step 1: Generate audio with persona-specific voice
+    const voiceName = personaConfig[currentPersona].voiceName;
+    status.textContent = `Generating voiceover (${voiceName})...`;
     fill.style.width = '10%';
     const audioBlob = await generateAudioBlob(script);
     generatedAudioBlob = audioBlob;
@@ -1092,11 +1204,12 @@ function estimateDuration(text) {
 async function generateAudioBlob(text) {
   // Use Microsoft Edge Neural TTS via our Render server — free, no API key
   const SERVER = 'https://djrideas-video-server.onrender.com';
+  const voice = personaConfig[currentPersona].voice;
 
   const res = await fetch(SERVER + '/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text })
+    body: JSON.stringify({ text, voice })
   });
 
   if (!res.ok) {
@@ -1560,34 +1673,28 @@ async function createVideo(canvas, audioBlob, onProgress) {
 
   document.getElementById('publish-status').textContent = 'Rendering animation frames...';
 
-  // Set up render canvas at 1280x720
-  const W = 1280, H = 720;
+  // Set up render canvas at 1920x1080 — full HD for maximum quality
+  const W = 1920, H = 1080;
   const renderCanvas = document.createElement('canvas');
   renderCanvas.width = W;
   renderCanvas.height = H;
 
-  // Load chart image
+  // Load chart image — decode at full native resolution
   let chartImg = null;
   if (imageBase64) {
     chartImg = await new Promise((resolve) => {
       const img = new Image();
+      img.decoding = 'sync';
       img.onload = () => resolve(img);
       img.onerror = () => resolve(null);
-      img.src = 'data:' + (imageMime || 'image/jpeg') + ';base64,' + imageBase64;
+      img.src = 'data:' + (imageMime || 'image/png') + ';base64,' + imageBase64;
     });
   }
 
-  // Render all frames as JPEGs and create a video from them
-  // Use a different approach: render frames to canvas, capture as PNG sequence
-  // Then pass to FFmpeg with concat
-
-  // Actually for FFmpeg WASM, easier to render frames in a loop and use rawvideo pipe
-  // We'll render to canvas at each frame time, get pixel data, and write as raw frames
-
   onProgress(0.2);
-  document.getElementById('publish-status').textContent = `Rendering ${totalFrames} frames...`;
+  document.getElementById('publish-status').textContent = `Rendering ${totalFrames} frames at 1080p...`;
 
-  // Write all frames as individual JPEGs
+  // Write all frames as high-quality JPEGs
   const BATCH = 25; // process in batches to avoid memory issues
   let frameCount = 0;
 
@@ -1595,7 +1702,7 @@ async function createVideo(canvas, audioBlob, onProgress) {
 
   for (let f = 0; f < totalFrames; f++) {
     drawFrame(renderCanvas, chartImg, f, totalFrames, currentAnalysis);
-    const blob = await new Promise(r => renderCanvas.toBlob(r, 'image/jpeg', 0.97));
+    const blob = await new Promise(r => renderCanvas.toBlob(r, 'image/jpeg', 1.0)); // max quality
     const buf = await blob.arrayBuffer();
     const fname = `frame${String(f).padStart(5,'0')}.jpg`;
     ffmpeg.FS('writeFile', fname, new Uint8Array(buf));
@@ -1616,17 +1723,17 @@ async function createVideo(canvas, audioBlob, onProgress) {
   ffmpeg.FS('writeFile', 'audio.mp3', await fetchFile(audioBlob));
 
   onProgress(0.43);
-  document.getElementById('publish-status').textContent = 'Encoding video...';
+  document.getElementById('publish-status').textContent = 'Encoding video at 1080p...';
 
-  // Combine frames + audio
+  // Combine frames + audio — maximum quality settings
   await ffmpeg.run(
     '-f', 'concat', '-safe', '0', '-i', 'frames.txt',
     '-i', 'audio.mp3',
     '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-crf', '26',
+    '-preset', 'medium',      // better compression than ultrafast
+    '-crf', '18',              // near-lossless (18=excellent, 23=default, 26=ok)
     '-c:a', 'aac',
-    '-b:a', '96k',
+    '-b:a', '192k',            // high quality audio
     '-pix_fmt', 'yuv420p',
     '-shortest',
     '-movflags', '+faststart',
