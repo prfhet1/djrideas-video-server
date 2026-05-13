@@ -103,6 +103,19 @@ app.post('/tts', async (req, res) => {
 const OAUTH_REDIRECT = 'https://djrideas-video-server.onrender.com/oauth/callback';
 const OAUTH_SCOPES   = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly';
 
+// Temporary in-memory token store — cleared after pickup
+const pendingTokens = new Map();
+
+// Poll endpoint — browser checks this after popup opens
+app.get('/oauth/token-ready', (req, res) => {
+  const entry = [...pendingTokens.values()][0];
+  if (entry) {
+    pendingTokens.clear();
+    return res.json(entry);
+  }
+  res.json({});
+});
+
 // Step 1 — browser sends client_id + secret, we store in cookies and redirect to Google
 app.get('/oauth/start', (req, res) => {
   const clientId     = req.query.client_id;
@@ -181,16 +194,29 @@ app.get('/oauth/callback', async (req, res) => {
     const channelName = channel?.snippet?.title || 'My Channel';
     const avatar      = channel?.snippet?.thumbnails?.default?.url || '';
 
+    // Store for polling fallback (in case postMessage is blocked)
+    const tokenPayload = {
+      accessToken:  tokenData.access_token,
+      refreshToken: tokenData.refresh_token || '',
+      channelName,
+      avatar
+    };
+    pendingTokens.set('latest', tokenPayload);
+    // Auto-clear after 2 minutes if not picked up
+    setTimeout(() => pendingTokens.delete('latest'), 120000);
+
     res.send(`<!DOCTYPE html><html><body><script>
-      window.opener && window.opener.postMessage({
-        type:         'youtube-auth-success',
-        accessToken:  ${JSON.stringify(tokenData.access_token)},
-        refreshToken: ${JSON.stringify(tokenData.refresh_token || '')},
-        channelName:  ${JSON.stringify(channelName)},
-        avatar:       ${JSON.stringify(avatar)}
-      }, '*');
-      window.close();
-    </script></body></html>`);
+      try {
+        window.opener && window.opener.postMessage({
+          type:         'youtube-auth-success',
+          accessToken:  ${JSON.stringify(tokenData.access_token)},
+          refreshToken: ${JSON.stringify(tokenData.refresh_token || '')},
+          channelName:  ${JSON.stringify(channelName)},
+          avatar:       ${JSON.stringify(avatar)}
+        }, '*');
+      } catch(e) {}
+      setTimeout(() => window.close(), 500);
+    </script><p style="font-family:sans-serif;text-align:center;margin-top:40px;color:#22c55e;">✓ Connected! You can close this window.</p></body></html>`);
 
   } catch(err) {
     console.error('OAuth error:', err.message);
