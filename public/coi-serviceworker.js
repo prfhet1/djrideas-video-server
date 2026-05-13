@@ -5,6 +5,14 @@ if (typeof window === 'undefined') {
   self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
   self.addEventListener("fetch", function(event) {
     if (event.request.cache === "only-if-cached" && event.request.mode !== "same-origin") return;
+    // Skip COEP headers for OAuth and Google API calls — they don't return CORP headers
+    const url = event.request.url;
+    const skipCoep = url.includes('accounts.google.com') ||
+                     url.includes('googleapis.com') ||
+                     url.includes('oauth') ||
+                     url.includes('/oauth/') ||
+                     url.includes('token-ready');
+    if (skipCoep) return; // let browser handle normally
     event.respondWith(
       fetch(event.request).then(function(response) {
         if (response.status === 0) return response;
