@@ -169,3 +169,76 @@ app.post('/create-video', upload.fields([
 });
 
 app.listen(PORT, () => console.log(`Video server running on port ${PORT}`));
+
+
+// YouTube upload proxy — browser can't call Google directly due to coi-serviceworker CORS
+// Server calls Google on behalf of the browser
+const https = require('https');
+
+app.post('/upload-youtube', upload.single('video'), async (req, res) => {
+  try {
+    const { apiKey, title, description, category } = req.body;
+    if (!req.file) return res.status(400).json({ error: 'Missing video file' });
+    if (!apiKey)   return res.status(400).json({ error: 'Missing API key' });
+
+    console.log(`YouTube upload — title: "${title}", size: ${req.file.size}`);
+
+    const metadata = {
+      snippet: {
+        title,
+        description,
+        categoryId: category || '27',
+        tags: ['swing trading', 'stock market education', 'technical analysis', 'educational']
+      },
+      status: { privacyStatus: 'public', selfDeclaredMadeForKids: false }
+    };
+
+    const boundary = '-------DJRideasBoundary314159';
+    const CRLF = '\r\n';
+    const metaStr = JSON.stringify(metadata);
+    const metaPart = Buffer.from(
+      `--${boundary}${CRLF}Content-Type: application/json; charset=UTF-8${CRLF}${CRLF}${metaStr}${CRLF}` +
+      `--${boundary}${CRLF}Content-Type: video/mp4${CRLF}${CRLF}`
+    );
+    const closePart = Buffer.from(`${CRLF}--${boundary}--`);
+    const body = Buffer.concat([metaPart, req.file.buffer, closePart]);
+
+    const options = {
+      hostname: 'www.googleapis.com',
+      path: `/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status&key=${apiKey}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/related; boundary="${boundary}"`,
+        'Content-Length': body.length
+      }
+    };
+
+    const result = await new Promise((resolve, reject) => {
+      const req2 = https.request(options, (r) => {
+        const chunks = [];
+        r.on('data', c => chunks.push(c));
+        r.on('end', () => {
+          const text = Buffer.concat(chunks).toString();
+          try { resolve({ status: r.statusCode, body: JSON.parse(text) }); }
+          catch(e) { resolve({ status: r.statusCode, body: { raw: text } }); }
+        });
+      });
+      req2.on('error', reject);
+      req2.write(body);
+      req2.end();
+    });
+
+    if (result.status >= 400) {
+      const msg = result.body?.error?.message || result.body?.raw || 'YouTube upload failed';
+      console.error('YouTube error:', msg);
+      return res.status(result.status).json({ error: msg });
+    }
+
+    console.log('YouTube upload success — id:', result.body.id);
+    res.json({ success: true, videoId: result.body.id, url: `https://youtu.be/${result.body.id}` });
+
+  } catch(err) {
+    console.error('Upload proxy error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
