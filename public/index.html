@@ -635,21 +635,51 @@ function connectYoutube() {
     `width=${w},height=${h},left=${left},top=${top}`
   );
 
+  window._oauthListener = null; // clear old
   window._oauthListener = (e) => {
     if (e.data?.type === 'youtube-auth-success') {
+      window.removeEventListener('message', window._oauthListener);
       saveKey('yt-access-token',  e.data.accessToken);
       saveKey('yt-refresh-token', e.data.refreshToken);
       saveKey('yt-channel-name',  e.data.channelName);
       saveKey('yt-avatar',        e.data.avatar);
       updateYouTubeUI();
+      updateDots();
       notify('YouTube connected ✓', 'success');
-      if (popup) popup.close();
+      if (popup && !popup.closed) popup.close();
     } else if (e.data?.type === 'youtube-auth-error') {
+      window.removeEventListener('message', window._oauthListener);
       notify('YouTube auth error: ' + e.data.error, 'error');
     }
   };
   window.removeEventListener('message', window._oauthListener);
   window.addEventListener('message', window._oauthListener);
+
+  // Also poll the server for token in case postMessage is blocked by service worker
+  const pollInterval = setInterval(async () => {
+    if (!popup || popup.closed) {
+      clearInterval(pollInterval);
+      return;
+    }
+    try {
+      const r = await fetch(SERVER + '/oauth/token-ready');
+      if (r.ok) {
+        const data = await r.json();
+        if (data.accessToken) {
+          clearInterval(pollInterval);
+          window.removeEventListener('message', window._oauthListener);
+          saveKey('yt-access-token',  data.accessToken);
+          saveKey('yt-refresh-token', data.refreshToken || '');
+          saveKey('yt-channel-name',  data.channelName || '');
+          saveKey('yt-avatar',        data.avatar || '');
+          updateYouTubeUI();
+          updateDots();
+          notify('YouTube connected ✓', 'success');
+          if (popup && !popup.closed) popup.close();
+        }
+      }
+    } catch(e) {}
+  }, 2000);
 }
 
 function disconnectYoutube() {
