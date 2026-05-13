@@ -396,7 +396,7 @@
               <button class="btn btn-ghost btn-sm" onclick="downloadVideo()">⬇️ Download video</button>
               <button class="btn btn-ghost btn-sm" onclick="rejectVideo()">✕ Reject & redo</button>
             </div>
-            <p style="font-size:11px; color:var(--text3); margin-top:10px; line-height:1.6;">💡 Video is in webm format — plays in Chrome. YouTube accepts webm directly.</p>
+            <p style="font-size:11px; color:var(--text3); margin-top:10px; line-height:1.6;">💡 Video is MP4 — ready for YouTube upload or download.</p>
           </div>
         </div>
 
@@ -866,7 +866,7 @@ CHART READING RULES — follow these precisely regardless of persona:
   * Orange dot = EXIT / new correction started
   * Pink/red triangle = bearish setup
 - Volatility: red dashed ATR line ABOVE the cloud = overextended, wait. INSIDE or below = ok.
-- Dashboard left panel: use ONLY the "D Trend" row. Left number = close level (entry trigger). Right number = stop loss level. The stop loss is ALWAYS below the close level — always present it as "stop below at [X]". Never place the stop above the entry.
+- Dashboard left panel: you may use ALL visible criteria to enrich the script — WST, WMT, WLT, VOL, D TREND, VOL AC/DIS, D RANGE, W RANGE, D MOMENTUM, W MOMENTUM, MARKET, SECTOR, SCORE, PRICE. The D Trend row is the primary entry rule: left number = close level (entry trigger), right number = stop loss level. The stop is ALWAYS below the close level. The SCORE row confirms the setup — entry requires a daily close above the close level WITH a score of 10/10. Never trigger entry on price alone. Use momentum, volume, sector strength and other dashboard data naturally in the script to add depth and context — but only mention what genuinely supports or adds to the narrative, don't list every number robotically.
 - OLD HIGH = purple horizontal line. Calculate % from entry level to old high. Under 2% = warn to monitor closely or wait. 2%+ = mention as natural target area.
 - EARNINGS (E) markers — RIGHT daily panel x-axis ONLY:
   * Count candles from current price to the next E marker on the DAILY RIGHT panel only.
@@ -874,7 +874,8 @@ CHART READING RULES — follow these precisely regardless of persona:
   * 4-15 candles ahead = mention casually, plan to close before
   * 15+ candles ahead = DO NOT mention earnings at all. Silence is better than a wrong call.
   * If you are not certain an E marker exists ahead on the daily = DO NOT mention earnings.
-- NEVER say "that's the trigger" — say "if after the close we meet all strategy criteria above [level]..."
+- NEVER say "that's the trigger" — say "if after the close we meet all strategy criteria — a daily close above [level] with a score of 10/10 — that's when we act."
+- The score of 10/10 is ALWAYS part of the entry condition. Never describe entry as just a price close — the score must be mentioned every time.
 - NEVER mention the score
 - NEVER say "dot", "triangle", "cloud", "ATR", "EMA", "signal", "indicator"
 - Always refer to purple line as "the old high"
@@ -895,7 +896,7 @@ SECTOR: IDEA — setup chart, no risk/reward tool visible.
   "event_urgency": "none" or "soon" or "urgent",
   "close_reason": null,
   "telegram": "2-3 sentences MAX. Write in the ${currentPersona} persona voice. Tease the setup with a hook that fits your style. Direct to YouTube. NO levels, NO details.",
-  "youtube": "8-12 sentences. Write entirely in the ${currentPersona} persona voice and style. Analyze this chart through your persona lens. Include the close level (left D Trend number) and stop level (right D Trend number) naturally — the stop is ALWAYS presented as sitting below the close level, never above. Address the old high. Only mention earnings if a clear E marker is 1-15 candles ahead on the daily. End with disclaimer in your voice."
+  "youtube": "8-12 sentences. Write entirely in the ${currentPersona} persona voice and style. Analyze this chart through your persona lens using all visible dashboard data naturally. Include the close level (left D Trend number) and stop level (right D Trend number) — the stop is ALWAYS below the close level. Always state that entry requires a daily close above [level] WITH a score of 10/10. Use other dashboard criteria like momentum, volume, sector strength where they genuinely add to the narrative. Address the old high. Only mention earnings if a clear E marker is 1-15 candles ahead on the daily. End with disclaimer in your voice."
 }`;
 
   const openPrompt = base + `
@@ -2004,7 +2005,7 @@ async function uploadToYoutube(apiKey, videoBlob, title, description) {
 
   const metadataStr = JSON.stringify(metadata);
   const metaPart = 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + metadataStr;
-  const videoPart = 'Content-Type: video/webm\r\n\r\n';
+  const videoPart = 'Content-Type: video/mp4\r\n\r\n';
 
   const videoAB = await videoBlob.arrayBuffer();
   const encoder = new TextEncoder();
