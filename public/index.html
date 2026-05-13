@@ -447,20 +447,45 @@
       </div>
 
       <div class="settings-section">
-        <h3><span class="status-dot" id="dot-youtube"></span> YouTube Data API</h3>
-        <div class="form-group">
-          <label>API Key</label>
-          <input type="password" id="youtube-key" placeholder="Your YouTube Data API key" oninput="saveKey('youtube', this.value)">
+        <h3><span class="status-dot" id="dot-youtube"></span> YouTube — OAuth 2.0</h3>
+        <div id="yt-connected-view" style="display:none;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+            <img id="yt-avatar" src="" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);">
+            <div>
+              <div id="yt-channel-name" style="font-size:13px; font-weight:600; color:var(--text);"></div>
+              <div style="font-size:11px; color:var(--green);">✓ Connected</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Default category</label>
+            <select id="yt-category" onchange="saveKey('yt-category', this.value)">
+              <option value="27">Education</option>
+              <option value="25">News & Politics</option>
+              <option value="22">People & Blogs</option>
+            </select>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="disconnectYoutube()">Disconnect YouTube</button>
         </div>
-        <div class="form-group">
-          <label>Channel default category</label>
-          <select id="yt-category" onchange="saveKey('yt-category', this.value)">
-            <option value="27">Education</option>
-            <option value="25">News & Politics</option>
-            <option value="22">People & Blogs</option>
-          </select>
+        <div id="yt-disconnected-view">
+          <p style="font-size:13px; color:var(--text2); margin-bottom:12px;">Enter your Google OAuth credentials then connect your channel.</p>
+          <div class="form-group">
+            <label>OAuth Client ID</label>
+            <input type="password" id="yt-client-id" placeholder="xxxxxx.apps.googleusercontent.com" oninput="saveKey('yt-client-id', this.value)">
+          </div>
+          <div class="form-group">
+            <label>OAuth Client Secret</label>
+            <input type="password" id="yt-client-secret" placeholder="GOCSPX-..." oninput="saveKey('yt-client-secret', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Default category</label>
+            <select id="yt-category" onchange="saveKey('yt-category', this.value)">
+              <option value="27">Education</option>
+              <option value="25">News & Politics</option>
+              <option value="22">People & Blogs</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="connectYoutube()">▶ Connect YouTube channel</button>
         </div>
-        <p style="font-size:11px; color:var(--text3);">Enable YouTube Data API v3 at console.cloud.google.com</p>
       </div>
 
       <div class="settings-section">
@@ -571,20 +596,85 @@ function saveKey(k, v) { localStorage.setItem('key_' + k, v); updateDots(); }
 function updateDots() {
   const setDot = (id, val) => { const el = document.getElementById(id); if (el) el.className = 'status-dot' + (val ? ' connected' : ''); };
   setDot('dot-claude', getKey('claude'));
-  setDot('dot-eleven', getKey('eleven'));
-  setDot('dot-youtube', getKey('youtube'));
+  setDot('dot-youtube', getKey('yt-access-token'));
   setDot('dot-telegram', getKey('telegram-token'));
 }
 
 function loadSettings() {
-  ['claude','eleven','eleven-voice','youtube','telegram-token','telegram-chat'].forEach(k => {
-    const el = document.getElementById(k + (k === 'eleven-voice' ? '' : k === 'eleven' ? '-key' : k === 'claude' ? '-key' : k === 'youtube' ? '-key' : k === 'telegram-token' ? '' : ''));
-    const input = document.getElementById(k === 'eleven-voice' ? 'eleven-voice' : k + '-key') || document.getElementById(k);
+  ['claude','telegram-token','telegram-chat'].forEach(k => {
+    const input = document.getElementById(k) || document.getElementById(k + '-key');
     if (input) input.value = getKey(k);
   });
+  const clientId = document.getElementById('yt-client-id');
+  const clientSecret = document.getElementById('yt-client-secret');
+  if (clientId) clientId.value = getKey('yt-client-id');
+  if (clientSecret) clientSecret.value = getKey('yt-client-secret');
   const ytCat = document.getElementById('yt-category');
   if (ytCat) ytCat.value = getKey('yt-category') || '27';
   updateDots();
+  updateYouTubeUI();
+}
+
+// ─── YouTube OAuth ────────────────────────────────────────
+const SERVER = 'https://djrideas-video-server.onrender.com';
+
+function connectYoutube() {
+  const clientId     = getKey('yt-client-id');
+  const clientSecret = getKey('yt-client-secret');
+  if (!clientId || !clientSecret) {
+    notify('Enter your OAuth Client ID and Secret first', 'error');
+    return;
+  }
+  const w = 500, h = 650;
+  const left = screen.width/2 - w/2;
+  const top  = screen.height/2 - h/2;
+  const params = new URLSearchParams({ client_id: clientId, client_secret: clientSecret });
+  const popup = window.open(
+    SERVER + '/oauth/start?' + params.toString(),
+    'youtube-oauth',
+    `width=${w},height=${h},left=${left},top=${top}`
+  );
+
+  window._oauthListener = (e) => {
+    if (e.data?.type === 'youtube-auth-success') {
+      saveKey('yt-access-token',  e.data.accessToken);
+      saveKey('yt-refresh-token', e.data.refreshToken);
+      saveKey('yt-channel-name',  e.data.channelName);
+      saveKey('yt-avatar',        e.data.avatar);
+      updateYouTubeUI();
+      notify('YouTube connected ✓', 'success');
+      if (popup) popup.close();
+    } else if (e.data?.type === 'youtube-auth-error') {
+      notify('YouTube auth error: ' + e.data.error, 'error');
+    }
+  };
+  window.removeEventListener('message', window._oauthListener);
+  window.addEventListener('message', window._oauthListener);
+}
+
+function disconnectYoutube() {
+  ['yt-access-token','yt-refresh-token','yt-channel-name','yt-avatar'].forEach(k => localStorage.removeItem('key_' + k));
+  updateYouTubeUI();
+  updateDots();
+  notify('YouTube disconnected', '');
+}
+
+function updateYouTubeUI() {
+  const token = getKey('yt-access-token');
+  const connectedView = document.getElementById('yt-connected-view');
+  const disconnectedView = document.getElementById('yt-disconnected-view');
+  if (!connectedView) return;
+  if (token) {
+    connectedView.style.display = 'block';
+    disconnectedView.style.display = 'none';
+    const name = document.getElementById('yt-channel-name');
+    const avatar = document.getElementById('yt-avatar');
+    if (name) name.textContent = getKey('yt-channel-name') || 'YouTube Channel';
+    if (avatar && getKey('yt-avatar')) avatar.src = getKey('yt-avatar');
+  } else {
+    connectedView.style.display = 'none';
+    disconnectedView.style.display = 'block';
+  }
 }
 
 // ─── Navigation ───────────────────────────────────────────
@@ -1646,8 +1736,7 @@ async function createVideo(canvas, audioBlob, onProgress) {
 }
 
 async function approveAndUpload() {
-  const youtubeKey = getKey('youtube');
-  if (!youtubeKey) { notify('Add YouTube API key in Settings first', 'error'); return; }
+  if (!getKey('yt-access-token')) { notify('Connect your YouTube channel in Settings first', 'error'); return; }
   if (!generatedVideoBlob) { notify('Generate a video first', 'error'); return; }
 
   const status = document.getElementById('publish-status');
@@ -1709,13 +1798,13 @@ function rejectVideo() {
 // Properly decodes audio first then records canvas + audio together
 
 async function uploadToYoutube(apiKey, videoBlob, title, description) {
-  const SERVER = 'https://djrideas-video-server.onrender.com';
-  const category = getKey('yt-category') || '27';
+  const token = getKey('yt-access-token');
+  if (!token) throw new Error('YouTube not connected — go to Settings and connect your channel first.');
 
-  // Send video + metadata to our server proxy — avoids coi-serviceworker CORS block
+  const category = getKey('yt-category') || '27';
   const formData = new FormData();
   formData.append('video', videoBlob, 'trade-video.mp4');
-  formData.append('apiKey', apiKey);
+  formData.append('accessToken', token);
   formData.append('title', title);
   formData.append('description', description);
   formData.append('category', category);
@@ -1727,6 +1816,11 @@ async function uploadToYoutube(apiKey, videoBlob, title, description) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
+    // Token expired — clear it so user reconnects
+    if (res.status === 401) {
+      disconnectYoutube();
+      throw new Error('YouTube session expired — please reconnect in Settings.');
+    }
     throw new Error(err.error || 'YouTube upload failed');
   }
   return res.json();
