@@ -67,16 +67,41 @@ app.post('/tts', async (req, res) => {
     console.log(`TTS request — voice: ${selectedVoice}, length: ${text.length}`);
 
     const { Communicate } = require('edge-tts-universal');
-    const communicate = new Communicate(text, { voice: selectedVoice });
-    const chunks = [];
-    for await (const chunk of communicate.stream()) {
-      if (chunk.type === 'audio' && chunk.data) {
-        chunks.push(chunk.data);
+
+    // Retry up to 3 times — Microsoft Edge TTS can transiently fail
+    let audioData = null;
+    let lastError = null;
+    const MAX_RETRIES = 3;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`TTS attempt ${attempt}/${MAX_RETRIES}...`);
+        const communicate = new Communicate(text, { voice: selectedVoice });
+        const chunks = [];
+        for await (const chunk of communicate.stream()) {
+          if (chunk.type === 'audio' && chunk.data) {
+            chunks.push(chunk.data);
+          }
+        }
+        if (chunks.length === 0) throw new Error('No audio was received.');
+        audioData = Buffer.concat(chunks);
+        console.log(`TTS attempt ${attempt} succeeded — size: ${audioData.length}`);
+        break; // success — exit retry loop
+      } catch (err) {
+        lastError = err;
+        console.warn(`TTS attempt ${attempt} failed: ${err.message}`);
+        if (attempt < MAX_RETRIES) {
+          // Wait 1.5s before retrying
+          await new Promise(r => setTimeout(r, 1500));
+        }
       }
     }
-    const audioData = Buffer.concat(chunks);
-    fs.writeFileSync(mp3Path, audioData);
 
+    if (!audioData || audioData.length === 0) {
+      throw new Error(`TTS failed after ${MAX_RETRIES} attempts: ${lastError?.message || 'No audio received'}`);
+    }
+
+    fs.writeFileSync(mp3Path, audioData);
     const audioBuffer = fs.readFileSync(mp3Path);
     console.log(`TTS done — voice: ${selectedVoice}, size: ${audioBuffer.length}`);
 
