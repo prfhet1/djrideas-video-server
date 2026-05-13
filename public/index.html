@@ -1492,93 +1492,145 @@ function drawFrame(canvas, chartImg, frameNum, totalFrames, analysis) {
     ctx.drawImage(chartImg, (W-dw)/2, (H-dh)/2, dw, dh);
   }
 
-  // INTRO CARD — 4% of video (was 9%) = ~2.5s for a 60s video
+  // INTRO CARD — 4% of video = ~2.5s
   const introEnd = 0.04;
   if (progress < introEnd) {
     const fadeIn = Math.min(1, (progress / introEnd) * 3);
-    const isBullish = !analysis || analysis.trend !== 'bearish';
     const ticker = (analysis?.ticker || '').toUpperCase();
 
-    // Module-specific design
-    const moduleConfig = {
-      idea:  { label: 'TRADE IDEA ON',   bg1: '#0a0e1a', bg2: '#0d1829', accent: '#3b82f6', accent2: '#60a5fa', pill: '#1e3a5f', pillText: '#60a5fa', tag: '💡 SETUP ANALYSIS' },
-      open:  { label: 'TRADE OPENING ON', bg1: '#030f08', bg2: '#041a0d', accent: '#22c55e', accent2: '#4ade80', pill: '#0f2d1a', pillText: '#4ade80', tag: '🟢 TRADE ACTIVE'   },
-      close: { label: 'TRADE RESUME ON',  bg1: '#0f0505', bg2: '#1a0808', accent: '#ef4444', accent2: '#f87171', pill: '#2d0f0f', pillText: '#f87171', tag: '🔴 TRADE CLOSED'   }
+    // Module configs — bold, distinct, full-frame designs
+    const mc = {
+      idea:  {
+        title:   'TRADE IDEA',
+        bg1: '#020818', bg2: '#061438',
+        accent:  '#3b82f6', accent2: '#93c5fd',
+        glow:    '#1d4ed8',
+        stripe:  '#2563eb',
+        tag:     '💡 SETUP ANALYSIS',
+        tagBg:   '#1e3a8a',
+        tagText: '#93c5fd',
+      },
+      open:  {
+        title:   'TRADE OPEN',
+        bg1: '#010f05', bg2: '#022010',
+        accent:  '#16a34a', accent2: '#86efac',
+        glow:    '#15803d',
+        stripe:  '#22c55e',
+        tag:     '🟢 TRADE ACTIVE',
+        tagBg:   '#14532d',
+        tagText: '#86efac',
+      },
+      close: {
+        title:   'TRADE REVIEW',
+        bg1: '#0f0202', bg2: '#1f0505',
+        accent:  '#dc2626', accent2: '#fca5a5',
+        glow:    '#b91c1c',
+        stripe:  '#ef4444',
+        tag:     '📊 TRADE RECAP',
+        tagBg:   '#7f1d1d',
+        tagText: '#fca5a5',
+      }
     };
-    const mc = moduleConfig[currentSector] || moduleConfig.idea;
+    const cfg = mc[currentSector] || mc.idea;
 
     ctx.save();
     ctx.globalAlpha = fadeIn;
 
-    // Background gradient
+    // Deep background
     const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    bgGrad.addColorStop(0, mc.bg1);
-    bgGrad.addColorStop(1, mc.bg2);
+    bgGrad.addColorStop(0, cfg.bg1);
+    bgGrad.addColorStop(1, cfg.bg2);
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Subtle radial glow behind logo
-    const glow = ctx.createRadialGradient(W/2, H*0.38, 0, W/2, H*0.38, H*0.35);
-    glow.addColorStop(0, mc.accent + '22');
-    glow.addColorStop(1, 'transparent');
-    ctx.fillStyle = glow;
+    // Big radial glow — center left
+    const glow1 = ctx.createRadialGradient(W*0.25, H*0.5, 0, W*0.25, H*0.5, H*0.8);
+    glow1.addColorStop(0, cfg.glow + '55');
+    glow1.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow1;
     ctx.fillRect(0, 0, W, H);
 
-    // Left accent bar
-    const barGrad = ctx.createLinearGradient(0, 0, 0, H);
-    barGrad.addColorStop(0, mc.accent);
-    barGrad.addColorStop(1, mc.accent + '44');
-    ctx.fillStyle = barGrad;
-    ctx.fillRect(0, 0, 8, H);
+    // Second glow — right side
+    const glow2 = ctx.createRadialGradient(W*0.85, H*0.3, 0, W*0.85, H*0.3, H*0.5);
+    glow2.addColorStop(0, cfg.accent + '33');
+    glow2.addColorStop(1, 'transparent');
+    ctx.fillStyle = glow2;
+    ctx.fillRect(0, 0, W, H);
 
-    // DJR Logo — top center, smaller
-    const logoSize = Math.round(H * 0.22);
-    drawLogoOnCanvas(ctx, W/2, H * 0.32, logoSize);
+    // Thick top stripe
+    const stripeGrad = ctx.createLinearGradient(0, 0, W, 0);
+    stripeGrad.addColorStop(0, cfg.stripe);
+    stripeGrad.addColorStop(0.5, cfg.accent2);
+    stripeGrad.addColorStop(1, cfg.stripe);
+    ctx.fillStyle = stripeGrad;
+    ctx.fillRect(0, 0, W, 18);
 
-    // Module tag pill — above main title
-    const tagW = 280, tagH = 36;
-    const tagX = W/2 - tagW/2;
-    const tagY = H * 0.535;
-    ctx.fillStyle = mc.pill;
+    // Bottom stripe
+    ctx.fillStyle = stripeGrad;
+    ctx.fillRect(0, H - 18, W, 18);
+
+    // Left vertical bar
+    ctx.fillStyle = cfg.stripe;
+    ctx.fillRect(0, 0, 14, H);
+
+    // TAG pill — top left
+    const tagPad = 22, tagH2 = 48;
+    const tagW2 = ctx.measureText(cfg.tag).width + tagPad * 2 + 60;
+    ctx.font = `700 ${Math.round(H*0.035)}px "Helvetica Neue", Arial`;
+    const tw = ctx.measureText(cfg.tag).width;
+    const tagW3 = tw + tagPad * 2;
+    const tagX2 = 40, tagY2 = 36;
+    ctx.fillStyle = cfg.tagBg;
     ctx.beginPath();
-    ctx.roundRect(tagX, tagY, tagW, tagH, 18);
+    ctx.roundRect(tagX2, tagY2, tagW3, tagH2, 10);
     ctx.fill();
-    ctx.strokeStyle = mc.accent + '88';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = cfg.accent + 'aa';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.fillStyle = mc.pillText;
-    ctx.font = `600 ${Math.round(H*0.022)}px "Helvetica Neue", Arial`;
+    ctx.fillStyle = cfg.tagText;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cfg.tag, tagX2 + tagPad, tagY2 + tagH2/2);
+
+    // DJR logo — top right corner, small
+    const logoSz = Math.round(H * 0.14);
+    drawLogoOnCanvas(ctx, W - logoSz/2 - 30, logoSz/2 + 30, logoSz);
+
+    // MAIN TITLE — huge, center
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(mc.tag, W/2, tagY + tagH/2);
-
-    // "DJR TRADE IDEA ON" label
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = `300 ${Math.round(H*0.032)}px "Helvetica Neue", Arial`;
-    ctx.textBaseline = 'top';
-    ctx.fillText('DJR ' + mc.label, W/2, H * 0.615);
-
-    // TICKER — large, bold, accent colored
-    ctx.font = `900 ${Math.round(H*0.13)}px "Arial Black", Arial Black, sans-serif`;
-    ctx.fillStyle = mc.accent2;
-    // Glow effect on ticker
-    ctx.shadowColor = mc.accent;
-    ctx.shadowBlur = 30;
-    ctx.fillText('$' + (ticker || '—'), W/2, H * 0.67);
+    ctx.font = `900 ${Math.round(H*0.165)}px "Arial Black", Arial Black, sans-serif`;
+    // Shadow/glow
+    ctx.shadowColor = cfg.glow;
+    ctx.shadowBlur = 60;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(cfg.title, W/2, H * 0.42);
     ctx.shadowBlur = 0;
 
-    // Bottom divider line
-    ctx.strokeStyle = mc.accent + '44';
-    ctx.lineWidth = 1;
+    // Divider line under title
+    const divGrad = ctx.createLinearGradient(W*0.1, 0, W*0.9, 0);
+    divGrad.addColorStop(0, 'transparent');
+    divGrad.addColorStop(0.5, cfg.accent2);
+    divGrad.addColorStop(1, 'transparent');
+    ctx.strokeStyle = divGrad;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(W * 0.2, H * 0.88);
-    ctx.lineTo(W * 0.8, H * 0.88);
+    ctx.moveTo(W * 0.1, H * 0.575);
+    ctx.lineTo(W * 0.9, H * 0.575);
     ctx.stroke();
 
-    // Bottom tagline
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    ctx.font = `300 ${Math.round(H*0.02)}px "Helvetica Neue", Arial`;
-    ctx.fillText('djrideas.onrender.com  ·  Educational content only', W/2, H * 0.915);
+    // TICKER — large, accent colored, below title
+    ctx.font = `900 ${Math.round(H*0.19)}px "Arial Black", Arial Black, sans-serif`;
+    ctx.shadowColor = cfg.accent;
+    ctx.shadowBlur = 50;
+    ctx.fillStyle = cfg.accent2;
+    ctx.fillText(ticker || '—', W/2, H * 0.76);
+    ctx.shadowBlur = 0;
+
+    // Bottom: DJR Trading label
+    ctx.font = `400 ${Math.round(H*0.028)}px "Helvetica Neue", Arial`;
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillText('DJR TRADING  ·  Educational content only', W/2, H * 0.935);
 
     ctx.restore();
     return;
