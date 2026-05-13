@@ -466,6 +466,7 @@
           </div>
           <button class="btn btn-ghost btn-sm" onclick="disconnectYoutube()">Disconnect YouTube</button>
           <button class="btn btn-ghost btn-sm" onclick="checkYouTubeToken()" style="margin-left:8px;">🔍 Verify token</button>
+          <button class="btn btn-ghost btn-sm" onclick="testYouTubeUpload()" style="margin-left:8px;">🧪 Test upload</button>
         </div>
         <div id="yt-disconnected-view">
           <p style="font-size:13px; color:var(--text2); margin-bottom:12px;">Enter your Google OAuth credentials then connect your channel.</p>
@@ -664,6 +665,53 @@ function checkYouTubeToken() {
     notify('Token found ✓ — ' + token.substring(0, 20) + '...', 'success');
   } else {
     notify('No token in localStorage — please reconnect', 'error');
+  }
+}
+
+async function testYouTubeUpload() {
+  const token = getKey('yt-access-token');
+  if (!token) { notify('No token — connect YouTube first', 'error'); return; }
+  notify('Creating test video...', '');
+
+  try {
+    // Create a minimal valid MP4 — 1 second black frame
+    const canvas = document.createElement('canvas');
+    canvas.width = 320; canvas.height = 240;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 320, 240);
+    ctx.fillStyle = '#3b82f6';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('DJR Test', 160, 120);
+
+    // Use MediaRecorder to create a small webm
+    const stream = canvas.captureStream(1);
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+    const chunks = [];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.start();
+    await new Promise(r => setTimeout(r, 1000));
+    recorder.stop();
+    await new Promise(r => recorder.onstop = r);
+    const videoBlob = new Blob(chunks, { type: 'video/webm' });
+
+    notify('Uploading test video to YouTube...', '');
+    const formData = new FormData();
+    formData.append('video', videoBlob, 'test.webm');
+    formData.append('accessToken', token);
+    formData.append('title', 'DJR Trading — Connection Test (will delete)');
+    formData.append('description', 'Test upload to verify YouTube connection.');
+    formData.append('category', '27');
+
+    const res = await fetch(SERVER + '/upload-youtube', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.url) {
+      notify('✓ Upload works! ' + data.url, 'success');
+    } else {
+      notify('Upload error: ' + (data.error || 'unknown'), 'error');
+    }
+  } catch(e) {
+    notify('Test failed: ' + e.message, 'error');
   }
 }
 
