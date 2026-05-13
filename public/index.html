@@ -1228,146 +1228,6 @@ async function generateAudioBlob(text) {
   return await res.blob();
 }
 
-async function approveAndUpload() {
-  const youtubeKey = getKey('youtube');
-  if (!youtubeKey) { notify('Add YouTube API key in Settings first', 'error'); return; }
-  if (!generatedVideoBlob) { notify('Generate a video first', 'error'); return; }
-
-  const status = document.getElementById('publish-status');
-  const fill = document.getElementById('progress-fill');
-  document.getElementById('btn-approve-upload').disabled = true;
-  status.textContent = 'Uploading to YouTube...';
-  fill.style.width = '10%';
-
-  try {
-    const ticker = currentAnalysis.ticker || 'Trade';
-    const sectorLabel = currentSector === 'idea' ? 'Setup idea' : currentSector === 'open' ? 'Trade open' : currentSector === 'close' ? 'Trade close' : 'Educational update';
-    const title = `${ticker} — ${sectorLabel} | Educational swing trade analysis`;
-    const description = `${currentAnalysis.youtube}\n\n⚠️ DISCLAIMER: This video is for educational and informational purposes only. It does not constitute financial advice, investment recommendations, or solicitation to buy or sell any securities. Always conduct your own research and consult with a licensed financial advisor before making any investment decisions. Past performance is not indicative of future results.`;
-
-    await uploadToYoutube(youtubeKey, generatedVideoBlob, title, description);
-    fill.style.width = '100%';
-    status.textContent = 'Published to YouTube ✓';
-    notify('Video uploaded to YouTube ✓', 'success');
-    markPublished('youtube');
-  } catch(e) {
-    status.textContent = 'Upload error: ' + e.message;
-    notify('Upload error: ' + e.message, 'error');
-    document.getElementById('btn-approve-upload').disabled = false;
-  }
-}
-
-function downloadVideo() {
-  if (!generatedVideoBlob) { notify('No video generated yet', 'error'); return; }
-  const url = URL.createObjectURL(generatedVideoBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${currentAnalysis?.ticker || 'trade'}-video.mp4`;
-  a.click();
-  URL.revokeObjectURL(url);
-  notify('MP4 downloaded ✓', 'success');
-}
-
-function downloadAudio() {
-  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
-  const url = URL.createObjectURL(generatedAudioBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
-  a.click();
-  URL.revokeObjectURL(url);
-  notify('Audio downloaded ✓', 'success');
-}
-
-async function convertToMp4(webmBlob) {
-  // Load FFmpeg 0.11 dynamically — simpler API, works in browser
-  if (!window._ffmpegLoaded) {
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-    window._ffmpegLoaded = true;
-  }
-
-  const { createFFmpeg, fetchFile } = FFmpeg;
-  const ffmpeg = createFFmpeg({
-    log: false,
-    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-  });
-
-  notify('Loading converter... (first time takes ~30 seconds)', '');
-  await ffmpeg.load();
-
-  notify('Converting to MP4...', '');
-  const inputData = await fetchFile(webmBlob);
-  ffmpeg.FS('writeFile', 'input.webm', inputData);
-
-  await ffmpeg.run(
-    '-i', 'input.webm',
-    '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-crf', '23',
-    '-c:a', 'aac',
-    '-b:a', '128k',
-    '-movflags', '+faststart',
-    'output.mp4'
-  );
-
-  const mp4Data = ffmpeg.FS('readFile', 'output.mp4');
-  ffmpeg.FS('unlink', 'input.webm');
-  ffmpeg.FS('unlink', 'output.mp4');
-
-  return new Blob([mp4Data.buffer], { type: 'video/mp4' });
-}
-
-function downloadAudio() {
-  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
-  const url = URL.createObjectURL(generatedAudioBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function rejectVideo() {
-  generatedVideoBlob = null;
-  document.getElementById('video-preview-section').style.display = 'none';
-  document.getElementById('publish-progress').style.display = 'none';
-  document.getElementById('btn-generate').disabled = false;
-  notify('Video rejected — edit your script and generate again', '');
-}
-
-function getAudioDuration(blob) {
-  return new Promise(resolve => {
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(audio.duration || 60); };
-    audio.onerror = () => { URL.revokeObjectURL(url); resolve(60); };
-  });
-}
-
-// createVideo: FFmpeg WASM v0.11 with connected animations
-// Animations are driven by currentAnalysis data (ticker, entry, stop, target, trend)
-let ffmpegLoaded = false;
-
-async function loadFFmpegScript() {
-  if (ffmpegLoaded) return;
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
-    s.onload = () => { ffmpegLoaded = true; resolve(); };
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
-
-// Draw one frame — logo in intro + top right, smart lower third labels
-function makePnlCurve() {
-  const pts = [];
   let v = 0;
   for (let i = 0; i < 50; i++) {
     v += 0.7 + Math.sin(i * 2.3 + 1.1) * 0.9 + Math.sin(i * 0.7) * 0.5;
@@ -1761,7 +1621,6 @@ async function createVideo(canvas, audioBlob, onProgress) {
   return new Blob([data.buffer], { type: 'video/mp4' });
 }
 
-
 async function approveAndUpload() {
   const youtubeKey = getKey('youtube');
   if (!youtubeKey) { notify('Add YouTube API key in Settings first', 'error'); return; }
@@ -1779,9 +1638,10 @@ async function approveAndUpload() {
     const title = `${ticker} — ${sectorLabel} | Educational swing trade analysis`;
     const description = `${currentAnalysis.youtube}\n\n⚠️ DISCLAIMER: This video is for educational and informational purposes only. It does not constitute financial advice, investment recommendations, or solicitation to buy or sell any securities. Always conduct your own research and consult with a licensed financial advisor before making any investment decisions. Past performance is not indicative of future results.`;
 
-    await uploadToYoutube(youtubeKey, generatedVideoBlob, title, description);
+    const result = await uploadToYoutube(youtubeKey, generatedVideoBlob, title, description);
     fill.style.width = '100%';
-    status.textContent = 'Published to YouTube ✓';
+    const ytUrl = result.url || 'https://studio.youtube.com';
+    status.innerHTML = `Published to YouTube ✓ — <a href="${ytUrl}" target="_blank" style="color:var(--blue);">View video</a>`;
     notify('Video uploaded to YouTube ✓', 'success');
     markPublished('youtube');
   } catch(e) {
@@ -1811,174 +1671,6 @@ function downloadAudio() {
   a.click();
   URL.revokeObjectURL(url);
   notify('Audio downloaded ✓', 'success');
-}
-
-async function convertToMp4(webmBlob) {
-  // Load FFmpeg 0.11 dynamically — simpler API, works in browser
-  if (!window._ffmpegLoaded) {
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-    window._ffmpegLoaded = true;
-  }
-
-  const { createFFmpeg, fetchFile } = FFmpeg;
-  const ffmpeg = createFFmpeg({
-    log: false,
-    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-  });
-
-  notify('Loading converter... (first time takes ~30 seconds)', '');
-  await ffmpeg.load();
-
-  notify('Converting to MP4...', '');
-  const inputData = await fetchFile(webmBlob);
-  ffmpeg.FS('writeFile', 'input.webm', inputData);
-
-  await ffmpeg.run(
-    '-i', 'input.webm',
-    '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-crf', '23',
-    '-c:a', 'aac',
-    '-b:a', '128k',
-    '-movflags', '+faststart',
-    'output.mp4'
-  );
-
-  const mp4Data = ffmpeg.FS('readFile', 'output.mp4');
-  ffmpeg.FS('unlink', 'input.webm');
-  ffmpeg.FS('unlink', 'output.mp4');
-
-  return new Blob([mp4Data.buffer], { type: 'video/mp4' });
-}
-
-function downloadAudio() {
-  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
-  const url = URL.createObjectURL(generatedAudioBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function rejectVideo() {
-  generatedVideoBlob = null;
-  document.getElementById('video-preview-section').style.display = 'none';
-  document.getElementById('publish-progress').style.display = 'none';
-  document.getElementById('btn-generate').disabled = false;
-  notify('Video rejected — edit your script and generate again', '');
-}
-
-
-async function approveAndUpload() {
-  const youtubeKey = getKey('youtube');
-  if (!youtubeKey) { notify('Add YouTube API key in Settings first', 'error'); return; }
-  if (!generatedVideoBlob) { notify('Generate a video first', 'error'); return; }
-
-  const status = document.getElementById('publish-status');
-  const fill = document.getElementById('progress-fill');
-  document.getElementById('btn-approve-upload').disabled = true;
-  status.textContent = 'Uploading to YouTube...';
-  fill.style.width = '10%';
-
-  try {
-    const ticker = currentAnalysis.ticker || 'Trade';
-    const sectorLabel = currentSector === 'idea' ? 'Setup idea' : currentSector === 'open' ? 'Trade open' : currentSector === 'close' ? 'Trade close' : 'Educational update';
-    const title = `${ticker} — ${sectorLabel} | Educational swing trade analysis`;
-    const description = `${currentAnalysis.youtube}\n\n⚠️ DISCLAIMER: This video is for educational and informational purposes only. It does not constitute financial advice, investment recommendations, or solicitation to buy or sell any securities. Always conduct your own research and consult with a licensed financial advisor before making any investment decisions. Past performance is not indicative of future results.`;
-
-    await uploadToYoutube(youtubeKey, generatedVideoBlob, title, description);
-    fill.style.width = '100%';
-    status.textContent = 'Published to YouTube ✓';
-    notify('Video uploaded to YouTube ✓', 'success');
-    markPublished('youtube');
-  } catch(e) {
-    status.textContent = 'Upload error: ' + e.message;
-    notify('Upload error: ' + e.message, 'error');
-    document.getElementById('btn-approve-upload').disabled = false;
-  }
-}
-
-function downloadVideo() {
-  if (!generatedVideoBlob) { notify('No video generated yet', 'error'); return; }
-  const url = URL.createObjectURL(generatedVideoBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${currentAnalysis?.ticker || 'trade'}-video.mp4`;
-  a.click();
-  URL.revokeObjectURL(url);
-  notify('MP4 downloaded ✓', 'success');
-}
-
-function downloadAudio() {
-  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
-  const url = URL.createObjectURL(generatedAudioBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
-  a.click();
-  URL.revokeObjectURL(url);
-  notify('Audio downloaded ✓', 'success');
-}
-
-async function convertToMp4(webmBlob) {
-  // Load FFmpeg 0.11 dynamically — simpler API, works in browser
-  if (!window._ffmpegLoaded) {
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js';
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-    window._ffmpegLoaded = true;
-  }
-
-  const { createFFmpeg, fetchFile } = FFmpeg;
-  const ffmpeg = createFFmpeg({
-    log: false,
-    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-  });
-
-  notify('Loading converter... (first time takes ~30 seconds)', '');
-  await ffmpeg.load();
-
-  notify('Converting to MP4...', '');
-  const inputData = await fetchFile(webmBlob);
-  ffmpeg.FS('writeFile', 'input.webm', inputData);
-
-  await ffmpeg.run(
-    '-i', 'input.webm',
-    '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-crf', '23',
-    '-c:a', 'aac',
-    '-b:a', '128k',
-    '-movflags', '+faststart',
-    'output.mp4'
-  );
-
-  const mp4Data = ffmpeg.FS('readFile', 'output.mp4');
-  ffmpeg.FS('unlink', 'input.webm');
-  ffmpeg.FS('unlink', 'output.mp4');
-
-  return new Blob([mp4Data.buffer], { type: 'video/mp4' });
-}
-
-function downloadAudio() {
-  if (!generatedAudioBlob) { notify('No audio generated yet', 'error'); return; }
-  const url = URL.createObjectURL(generatedAudioBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${currentAnalysis?.ticker || 'trade'}-audio.mp3`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function rejectVideo() {
@@ -1993,41 +1685,25 @@ function rejectVideo() {
 // Properly decodes audio first then records canvas + audio together
 
 async function uploadToYoutube(apiKey, videoBlob, title, description) {
+  const SERVER = 'https://djrideas-video-server.onrender.com';
   const category = getKey('yt-category') || '27';
-  const metadata = {
-    snippet: { title, description, categoryId: category, tags: ['swing trading', 'stock market education', 'technical analysis', 'educational'] },
-    status: { privacyStatus: 'public', selfDeclaredMadeForKids: false }
-  };
 
-  const boundary = '-------314159265358979323846';
-  const delimiter = '\r\n--' + boundary + '\r\n';
-  const closeDelim = '\r\n--' + boundary + '--';
+  // Send video + metadata to our server proxy — avoids coi-serviceworker CORS block
+  const formData = new FormData();
+  formData.append('video', videoBlob, 'trade-video.mp4');
+  formData.append('apiKey', apiKey);
+  formData.append('title', title);
+  formData.append('description', description);
+  formData.append('category', category);
 
-  const metadataStr = JSON.stringify(metadata);
-  const metaPart = 'Content-Type: application/json; charset=UTF-8\r\n\r\n' + metadataStr;
-  const videoPart = 'Content-Type: video/mp4\r\n\r\n';
-
-  const videoAB = await videoBlob.arrayBuffer();
-  const encoder = new TextEncoder();
-
-  const parts = [
-    encoder.encode(delimiter + metaPart + delimiter + videoPart),
-    new Uint8Array(videoAB),
-    encoder.encode(closeDelim)
-  ];
-  const total = parts.reduce((s, p) => s + p.length, 0);
-  const body = new Uint8Array(total);
-  let offset = 0;
-  for (const p of parts) { body.set(p, offset); offset += p.length; }
-
-  const res = await fetch(`https://www.googleapis.com/upload/youtube/v3/videos?uploadType=multipart&part=snippet,status&key=${apiKey}`, {
+  const res = await fetch(SERVER + '/upload-youtube', {
     method: 'POST',
-    headers: { 'Content-Type': `multipart/related; boundary="${boundary}"`, 'Content-Length': total },
-    body
+    body: formData
   });
+
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error?.message || 'YouTube upload failed');
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'YouTube upload failed');
   }
   return res.json();
 }
